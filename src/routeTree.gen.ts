@@ -14,6 +14,12 @@ import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedOrgsRouteImport } from './routes/_authenticated/orgs'
 import { Route as AuthenticatedOOrgIdRouteImport } from './routes/_authenticated/o.$orgId'
+import { Route as AuthenticatedOOrgIdIndexRouteImport } from './routes/_authenticated/o.$orgId.index'
+import { Route as AuthenticatedOOrgIdTasksRouteImport } from './routes/_authenticated/o.$orgId.tasks'
+import { Route as AuthenticatedOOrgIdPlaybookRouteImport } from './routes/_authenticated/o.$orgId.playbook'
+import { Route as AuthenticatedOOrgIdObligationsRouteImport } from './routes/_authenticated/o.$orgId.obligations'
+import { Route as AuthenticatedOOrgIdEvidenceRouteImport } from './routes/_authenticated/o.$orgId.evidence'
+import { Route as AuthenticatedOOrgIdObligationsIdRouteImport } from './routes/_authenticated/o.$orgId.obligations.$id'
 
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
@@ -39,18 +45,65 @@ const AuthenticatedOOrgIdRoute = AuthenticatedOOrgIdRouteImport.update({
   path: '/o/$orgId',
   getParentRoute: () => AuthenticatedRouteRoute,
 } as any)
+const AuthenticatedOOrgIdIndexRoute =
+  AuthenticatedOOrgIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
+const AuthenticatedOOrgIdTasksRoute =
+  AuthenticatedOOrgIdTasksRouteImport.update({
+    id: '/tasks',
+    path: '/tasks',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
+const AuthenticatedOOrgIdPlaybookRoute =
+  AuthenticatedOOrgIdPlaybookRouteImport.update({
+    id: '/playbook',
+    path: '/playbook',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
+const AuthenticatedOOrgIdObligationsRoute =
+  AuthenticatedOOrgIdObligationsRouteImport.update({
+    id: '/obligations',
+    path: '/obligations',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
+const AuthenticatedOOrgIdEvidenceRoute =
+  AuthenticatedOOrgIdEvidenceRouteImport.update({
+    id: '/evidence',
+    path: '/evidence',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
+const AuthenticatedOOrgIdObligationsIdRoute =
+  AuthenticatedOOrgIdObligationsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedOOrgIdObligationsRoute,
+  } as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/orgs': typeof AuthenticatedOrgsRoute
-  '/o/$orgId': typeof AuthenticatedOOrgIdRoute
+  '/o/$orgId': typeof AuthenticatedOOrgIdRouteWithChildren
+  '/o/$orgId/evidence': typeof AuthenticatedOOrgIdEvidenceRoute
+  '/o/$orgId/obligations': typeof AuthenticatedOOrgIdObligationsRouteWithChildren
+  '/o/$orgId/playbook': typeof AuthenticatedOOrgIdPlaybookRoute
+  '/o/$orgId/tasks': typeof AuthenticatedOOrgIdTasksRoute
+  '/o/$orgId/': typeof AuthenticatedOOrgIdIndexRoute
+  '/o/$orgId/obligations/$id': typeof AuthenticatedOOrgIdObligationsIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
   '/orgs': typeof AuthenticatedOrgsRoute
-  '/o/$orgId': typeof AuthenticatedOOrgIdRoute
+  '/o/$orgId/evidence': typeof AuthenticatedOOrgIdEvidenceRoute
+  '/o/$orgId/obligations': typeof AuthenticatedOOrgIdObligationsRouteWithChildren
+  '/o/$orgId/playbook': typeof AuthenticatedOOrgIdPlaybookRoute
+  '/o/$orgId/tasks': typeof AuthenticatedOOrgIdTasksRoute
+  '/o/$orgId': typeof AuthenticatedOOrgIdIndexRoute
+  '/o/$orgId/obligations/$id': typeof AuthenticatedOOrgIdObligationsIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -58,13 +111,38 @@ export interface FileRoutesById {
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
   '/_authenticated/orgs': typeof AuthenticatedOrgsRoute
-  '/_authenticated/o/$orgId': typeof AuthenticatedOOrgIdRoute
+  '/_authenticated/o/$orgId': typeof AuthenticatedOOrgIdRouteWithChildren
+  '/_authenticated/o/$orgId/evidence': typeof AuthenticatedOOrgIdEvidenceRoute
+  '/_authenticated/o/$orgId/obligations': typeof AuthenticatedOOrgIdObligationsRouteWithChildren
+  '/_authenticated/o/$orgId/playbook': typeof AuthenticatedOOrgIdPlaybookRoute
+  '/_authenticated/o/$orgId/tasks': typeof AuthenticatedOOrgIdTasksRoute
+  '/_authenticated/o/$orgId/': typeof AuthenticatedOOrgIdIndexRoute
+  '/_authenticated/o/$orgId/obligations/$id': typeof AuthenticatedOOrgIdObligationsIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/auth' | '/orgs' | '/o/$orgId'
+  fullPaths:
+    | '/'
+    | '/auth'
+    | '/orgs'
+    | '/o/$orgId'
+    | '/o/$orgId/evidence'
+    | '/o/$orgId/obligations'
+    | '/o/$orgId/playbook'
+    | '/o/$orgId/tasks'
+    | '/o/$orgId/'
+    | '/o/$orgId/obligations/$id'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/auth' | '/orgs' | '/o/$orgId'
+  to:
+    | '/'
+    | '/auth'
+    | '/orgs'
+    | '/o/$orgId/evidence'
+    | '/o/$orgId/obligations'
+    | '/o/$orgId/playbook'
+    | '/o/$orgId/tasks'
+    | '/o/$orgId'
+    | '/o/$orgId/obligations/$id'
   id:
     | '__root__'
     | '/'
@@ -72,6 +150,12 @@ export interface FileRouteTypes {
     | '/auth'
     | '/_authenticated/orgs'
     | '/_authenticated/o/$orgId'
+    | '/_authenticated/o/$orgId/evidence'
+    | '/_authenticated/o/$orgId/obligations'
+    | '/_authenticated/o/$orgId/playbook'
+    | '/_authenticated/o/$orgId/tasks'
+    | '/_authenticated/o/$orgId/'
+    | '/_authenticated/o/$orgId/obligations/$id'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -117,17 +201,94 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgIdRouteImport
       parentRoute: typeof AuthenticatedRouteRoute
     }
+    '/_authenticated/o/$orgId/': {
+      id: '/_authenticated/o/$orgId/'
+      path: '/'
+      fullPath: '/o/$orgId/'
+      preLoaderRoute: typeof AuthenticatedOOrgIdIndexRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
+    }
+    '/_authenticated/o/$orgId/tasks': {
+      id: '/_authenticated/o/$orgId/tasks'
+      path: '/tasks'
+      fullPath: '/o/$orgId/tasks'
+      preLoaderRoute: typeof AuthenticatedOOrgIdTasksRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
+    }
+    '/_authenticated/o/$orgId/playbook': {
+      id: '/_authenticated/o/$orgId/playbook'
+      path: '/playbook'
+      fullPath: '/o/$orgId/playbook'
+      preLoaderRoute: typeof AuthenticatedOOrgIdPlaybookRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
+    }
+    '/_authenticated/o/$orgId/obligations': {
+      id: '/_authenticated/o/$orgId/obligations'
+      path: '/obligations'
+      fullPath: '/o/$orgId/obligations'
+      preLoaderRoute: typeof AuthenticatedOOrgIdObligationsRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
+    }
+    '/_authenticated/o/$orgId/evidence': {
+      id: '/_authenticated/o/$orgId/evidence'
+      path: '/evidence'
+      fullPath: '/o/$orgId/evidence'
+      preLoaderRoute: typeof AuthenticatedOOrgIdEvidenceRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
+    }
+    '/_authenticated/o/$orgId/obligations/$id': {
+      id: '/_authenticated/o/$orgId/obligations/$id'
+      path: '/$id'
+      fullPath: '/o/$orgId/obligations/$id'
+      preLoaderRoute: typeof AuthenticatedOOrgIdObligationsIdRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdObligationsRoute
+    }
   }
 }
 
+interface AuthenticatedOOrgIdObligationsRouteChildren {
+  AuthenticatedOOrgIdObligationsIdRoute: typeof AuthenticatedOOrgIdObligationsIdRoute
+}
+
+const AuthenticatedOOrgIdObligationsRouteChildren: AuthenticatedOOrgIdObligationsRouteChildren =
+  {
+    AuthenticatedOOrgIdObligationsIdRoute:
+      AuthenticatedOOrgIdObligationsIdRoute,
+  }
+
+const AuthenticatedOOrgIdObligationsRouteWithChildren =
+  AuthenticatedOOrgIdObligationsRoute._addFileChildren(
+    AuthenticatedOOrgIdObligationsRouteChildren,
+  )
+
+interface AuthenticatedOOrgIdRouteChildren {
+  AuthenticatedOOrgIdEvidenceRoute: typeof AuthenticatedOOrgIdEvidenceRoute
+  AuthenticatedOOrgIdObligationsRoute: typeof AuthenticatedOOrgIdObligationsRouteWithChildren
+  AuthenticatedOOrgIdPlaybookRoute: typeof AuthenticatedOOrgIdPlaybookRoute
+  AuthenticatedOOrgIdTasksRoute: typeof AuthenticatedOOrgIdTasksRoute
+  AuthenticatedOOrgIdIndexRoute: typeof AuthenticatedOOrgIdIndexRoute
+}
+
+const AuthenticatedOOrgIdRouteChildren: AuthenticatedOOrgIdRouteChildren = {
+  AuthenticatedOOrgIdEvidenceRoute: AuthenticatedOOrgIdEvidenceRoute,
+  AuthenticatedOOrgIdObligationsRoute:
+    AuthenticatedOOrgIdObligationsRouteWithChildren,
+  AuthenticatedOOrgIdPlaybookRoute: AuthenticatedOOrgIdPlaybookRoute,
+  AuthenticatedOOrgIdTasksRoute: AuthenticatedOOrgIdTasksRoute,
+  AuthenticatedOOrgIdIndexRoute: AuthenticatedOOrgIdIndexRoute,
+}
+
+const AuthenticatedOOrgIdRouteWithChildren =
+  AuthenticatedOOrgIdRoute._addFileChildren(AuthenticatedOOrgIdRouteChildren)
+
 interface AuthenticatedRouteRouteChildren {
   AuthenticatedOrgsRoute: typeof AuthenticatedOrgsRoute
-  AuthenticatedOOrgIdRoute: typeof AuthenticatedOOrgIdRoute
+  AuthenticatedOOrgIdRoute: typeof AuthenticatedOOrgIdRouteWithChildren
 }
 
 const AuthenticatedRouteRouteChildren: AuthenticatedRouteRouteChildren = {
   AuthenticatedOrgsRoute: AuthenticatedOrgsRoute,
-  AuthenticatedOOrgIdRoute: AuthenticatedOOrgIdRoute,
+  AuthenticatedOOrgIdRoute: AuthenticatedOOrgIdRouteWithChildren,
 }
 
 const AuthenticatedRouteRouteWithChildren =
