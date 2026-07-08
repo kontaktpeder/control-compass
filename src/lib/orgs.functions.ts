@@ -15,6 +15,11 @@ export const createOrganization = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
+    // Debug: check what PostgREST sees as auth.uid()
+    const { data: whoami } = await supabase.rpc as any;
+    const { data: uidCheck, error: uidErr } = await (supabase as any).rpc("get_current_uid").catch((e: any) => ({ data: null, error: e }));
+    console.log("[createOrganization] userId=", userId, "auth.uid()=", uidCheck, "err=", uidErr);
+
     const { data: org, error } = await supabase
       .from("organizations")
       .insert({
@@ -25,7 +30,8 @@ export const createOrganization = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) throw new Error(error.message);
+    if (error) throw new Error(`${error.message} | userId=${userId} auth.uid=${JSON.stringify(uidCheck)}`);
+
 
     const { error: memErr } = await supabase.from("memberships").insert({
       org_id: org.id,
