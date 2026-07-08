@@ -1,8 +1,9 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { generateObject } from "ai";
+import { generateObject, NoObjectGeneratedError } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createLovableAiGatewayProvider, requireLovableApiKey } from "./ai-gateway.server";
+
 
 const CLASSIFY_MODEL = "google/gemini-2.5-flash";
 const ASSESS_MODEL = "google/gemini-2.5-flash";
