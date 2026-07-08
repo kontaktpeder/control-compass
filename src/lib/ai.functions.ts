@@ -179,28 +179,50 @@ export const assessObligation = createServerFn({ method: "POST" })
     const provider = createLovableAiGatewayProvider(requireLovableApiKey());
     const model = provider(ASSESS_MODEL);
 
-    const { object: assessment } = await generateObject({
-      model,
-      system:
-        "You assess whether an organizational obligation is supported by the evidence uploaded. " +
-        "Be honest and conservative. Never claim compliance. Only mark 'satisfied' if the required " +
-        "evidence types are clearly present. Otherwise pick 'partially_satisfied', 'missing', " +
-        "'needs_review', or 'unknown'. Provide short reasoning and a list of what's still missing.",
-      prompt: [
-        `Obligation: ${ob.title}`,
-        `Why it exists: ${ob.why ?? "n/a"}`,
-        `Required evidence: ${(ob.evidence_requirements ?? []).join("; ") || "n/a"}`,
-        "",
-        "Available evidence:",
-        evidenceLines,
-      ].join("\n"),
-      schema: z.object({
-        status: z.enum(["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"]),
-        confidence: z.number().min(0).max(1),
-        reasoning: z.string(),
-        missing_evidence: z.array(z.string()),
-      }),
+    const schema = z.object({
+      status: z.enum(["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"]),
+      confidence: z.number(),
+      reasoning: z.string(),
+      missing_evidence: z.array(z.string()),
     });
+    type Assessment = z.infer<typeof schema>;
+    let assessment: Assessment;
+    try {
+      const gen = await generateObject({
+        model,
+        system:
+          "You assess whether an organizational obligation is supported by the evidence uploaded. " +
+          "Be honest and conservative. Never claim compliance. Only mark 'satisfied' if the required " +
+          "evidence types are clearly present. Otherwise pick 'partially_satisfied', 'missing', " +
+          "'needs_review', or 'unknown'. Provide short reasoning and a list of what's still missing.",
+        prompt: [
+          `Obligation: ${ob.title}`,
+          `Why it exists: ${ob.why ?? "n/a"}`,
+          `Required evidence: ${(ob.evidence_requirements ?? []).join("; ") || "n/a"}`,
+          "",
+          "Available evidence:",
+          evidenceLines,
+        ].join("\n"),
+        schema,
+      });
+      assessment = gen.object;
+    } catch (e) {
+      const raw = NoObjectGeneratedError.isInstance(e) ? (e as { text?: string }).text : undefined;
+      const parsed = tryParseJson(raw);
+      const allowed = ["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"] as const;
+      assessment = {
+        status: (allowed as readonly string[]).includes(parsed?.status)
+          ? parsed.status
+          : "needs_review",
+        confidence: typeof parsed?.confidence === "number" ? parsed.confidence : 0,
+        reasoning: parsed?.reasoning ?? (e instanceof Error ? e.message : "Assessment unavailable"),
+        missing_evidence: Array.isArray(parsed?.missing_evidence)
+          ? parsed.missing_evidence.filter((x: unknown) => typeof x === "string")
+          : [],
+      };
+    }
+    assessment.confidence = Math.max(0, Math.min(1, assessment.confidence));
+
 
     await supabase.from("assessments").insert({
       org_id: ob.org_id,
