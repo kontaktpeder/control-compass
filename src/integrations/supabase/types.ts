@@ -71,13 +71,20 @@ export type Database = {
           classification_status: string
           created_at: string
           document_type: string | null
+          document_type_candidates: Json
           document_type_confidence: number | null
           file_name: string
           file_path: string
           id: string
           mime_type: string | null
           org_id: string
+          primary_document_type: string | null
+          primary_document_type_confidence: number | null
+          primary_purpose: string | null
+          primary_purpose_confidence: number | null
           purpose: string | null
+          purpose_candidates: Json
+          review_status: string
           size_bytes: number | null
           uploaded_by: string
         }
@@ -89,13 +96,20 @@ export type Database = {
           classification_status?: string
           created_at?: string
           document_type?: string | null
+          document_type_candidates?: Json
           document_type_confidence?: number | null
           file_name: string
           file_path: string
           id?: string
           mime_type?: string | null
           org_id: string
+          primary_document_type?: string | null
+          primary_document_type_confidence?: number | null
+          primary_purpose?: string | null
+          primary_purpose_confidence?: number | null
           purpose?: string | null
+          purpose_candidates?: Json
+          review_status?: string
           size_bytes?: number | null
           uploaded_by: string
         }
@@ -107,13 +121,20 @@ export type Database = {
           classification_status?: string
           created_at?: string
           document_type?: string | null
+          document_type_candidates?: Json
           document_type_confidence?: number | null
           file_name?: string
           file_path?: string
           id?: string
           mime_type?: string | null
           org_id?: string
+          primary_document_type?: string | null
+          primary_document_type_confidence?: number | null
+          primary_purpose?: string | null
+          primary_purpose_confidence?: number | null
           purpose?: string | null
+          purpose_candidates?: Json
+          review_status?: string
           size_bytes?: number | null
           uploaded_by?: string
         }
