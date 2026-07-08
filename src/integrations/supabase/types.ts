@@ -64,38 +64,56 @@ export type Database = {
       }
       evidence: {
         Row: {
+          ai_alternatives: Json
           ai_confidence: number | null
+          ai_reasoning: string | null
           ai_summary: string | null
+          classification_status: string
           created_at: string
+          document_type: string | null
+          document_type_confidence: number | null
           file_name: string
           file_path: string
           id: string
           mime_type: string | null
           org_id: string
+          purpose: string | null
           size_bytes: number | null
           uploaded_by: string
         }
         Insert: {
+          ai_alternatives?: Json
           ai_confidence?: number | null
+          ai_reasoning?: string | null
           ai_summary?: string | null
+          classification_status?: string
           created_at?: string
+          document_type?: string | null
+          document_type_confidence?: number | null
           file_name: string
           file_path: string
           id?: string
           mime_type?: string | null
           org_id: string
+          purpose?: string | null
           size_bytes?: number | null
           uploaded_by: string
         }
         Update: {
+          ai_alternatives?: Json
           ai_confidence?: number | null
+          ai_reasoning?: string | null
           ai_summary?: string | null
+          classification_status?: string
           created_at?: string
+          document_type?: string | null
+          document_type_confidence?: number | null
           file_name?: string
           file_path?: string
           id?: string
           mime_type?: string | null
           org_id?: string
+          purpose?: string | null
           size_bytes?: number | null
           uploaded_by?: string
         }
