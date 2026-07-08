@@ -1,6 +1,6 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { generateText, Output } from "ai";
+import { generateObject } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createLovableAiGatewayProvider, requireLovableApiKey } from "./ai-gateway.server";
 
@@ -82,20 +82,16 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       });
     }
 
-    const { experimental_output } = await generateText({
+    const { object: result } = await generateObject({
       model,
       messages: [{ role: "user", content: userContent }],
-      experimental_output: Output.object({
-        schema: z.object({
-          summary: z.string().describe("One-paragraph summary of what this document contains."),
-          suggested_obligation_ids: z.array(z.string()),
-          reasoning: z.string(),
-          confidence: z.number().min(0).max(1),
-        }),
+      schema: z.object({
+        summary: z.string().describe("One-paragraph summary of what this document contains."),
+        suggested_obligation_ids: z.array(z.string()),
+        reasoning: z.string(),
+        confidence: z.number().min(0).max(1),
       }),
     });
-
-    const result = experimental_output;
 
     // Persist summary + suggested links
     await supabase
@@ -105,8 +101,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
     const validIds = new Set((obligations ?? []).map((o) => o.id));
     const linkRows = result.suggested_obligation_ids
-      .filter((id) => validIds.has(id))
-      .map((obligation_id) => ({
+      .filter((id: string) => validIds.has(id))
+      .map((obligation_id: string) => ({
         org_id: ev.org_id,
         evidence_id: ev.id,
         obligation_id,
@@ -123,7 +119,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     return {
       summary: result.summary,
       confidence: result.confidence,
-      linked_obligation_ids: linkRows.map((r) => r.obligation_id),
+      linked_obligation_ids: linkRows.map((r: { obligation_id: string }) => r.obligation_id),
     };
   });
 
@@ -163,7 +159,7 @@ export const assessObligation = createServerFn({ method: "POST" })
     const provider = createLovableAiGatewayProvider(requireLovableApiKey());
     const model = provider(ASSESS_MODEL);
 
-    const { experimental_output } = await generateText({
+    const { object: assessment } = await generateObject({
       model,
       system:
         "You assess whether an organizational obligation is supported by the evidence uploaded. " +
@@ -178,16 +174,13 @@ export const assessObligation = createServerFn({ method: "POST" })
         "Available evidence:",
         evidenceLines,
       ].join("\n"),
-      experimental_output: Output.object({
-        schema: z.object({
-          status: z.enum(["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"]),
-          confidence: z.number().min(0).max(1),
-          reasoning: z.string(),
-          missing_evidence: z.array(z.string()),
-        }),
+      schema: z.object({
+        status: z.enum(["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"]),
+        confidence: z.number().min(0).max(1),
+        reasoning: z.string(),
+        missing_evidence: z.array(z.string()),
       }),
     });
-    const assessment = experimental_output;
 
     await supabase.from("assessments").insert({
       org_id: ob.org_id,
