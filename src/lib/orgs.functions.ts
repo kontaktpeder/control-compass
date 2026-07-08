@@ -27,6 +27,10 @@ export const createOrganization = createServerFn({ method: "POST" })
       .single();
     if (error) throw new Error(error.message);
 
+
+
+
+
     const { error: memErr } = await supabase.from("memberships").insert({
       org_id: org.id,
       user_id: userId,
