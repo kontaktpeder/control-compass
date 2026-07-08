@@ -6,7 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { classifyEvidence, generateTasks, confirmDocumentType } from "@/lib/ai.functions";
+import { classifyEvidence, generateTasks, confirmEvidenceField } from "@/lib/ai.functions";
 import { toast } from "sonner";
 import { Upload, FileText, Sparkles, Check } from "lucide-react";
 
@@ -14,27 +14,13 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
   component: EvidencePage,
 });
 
-type ClassificationStatus =
-  | "direct_evidence"
-  | "supporting_evidence"
-  | "governance_documentation"
-  | "operational_documentation"
-  | "historical_documentation"
-  | "internal_knowledge"
-  | "needs_review"
-  | "no_match"
-  | "unknown";
+type ReviewStatus = "confirmed" | "needs_review" | "unknown";
+type Candidate = { label: string; confidence: number };
 
-const STATUS_META: Record<ClassificationStatus, { label: string; tone: string; explain: string }> = {
-  direct_evidence:            { label: "Direct legal evidence", tone: "bg-status-satisfied-bg text-status-satisfied", explain: "Satisfies a statutory obligation." },
-  supporting_evidence:        { label: "Supporting evidence",  tone: "bg-status-partial-bg text-status-partial",     explain: "Strengthens an obligation but not sufficient alone." },
-  governance_documentation:   { label: "Governance document",  tone: "bg-status-partial-bg text-status-partial",     explain: "Documents how the organization is governed." },
-  operational_documentation:  { label: "Operational document", tone: "bg-status-partial-bg text-status-partial",     explain: "Supports day-to-day operations." },
-  historical_documentation:   { label: "Historical record",    tone: "bg-status-unknown-bg text-status-unknown",     explain: "Stored for traceability." },
-  internal_knowledge:         { label: "Internal knowledge",   tone: "bg-status-unknown-bg text-status-unknown",     explain: "Valuable to the organization; no obligation link." },
-  needs_review:               { label: "Needs review",         tone: "bg-status-partial-bg text-status-partial",     explain: "AI is uncertain — confirm below." },
-  no_match:                   { label: "No matching obligation", tone: "bg-status-unknown-bg text-status-unknown",  explain: "Understood, but not tied to any known obligation." },
-  unknown:                    { label: "Unknown",              tone: "bg-status-unknown-bg text-status-unknown",     explain: "Could not understand this document." },
+const REVIEW_META: Record<ReviewStatus, { label: string; tone: string }> = {
+  confirmed:    { label: "Confirmed",    tone: "bg-status-satisfied-bg text-status-satisfied" },
+  needs_review: { label: "Needs review", tone: "bg-status-partial-bg text-status-partial" },
+  unknown:      { label: "Unknown",      tone: "bg-status-unknown-bg text-status-unknown" },
 };
 
 type EvidenceRow = {
@@ -43,13 +29,13 @@ type EvidenceRow = {
   mime_type: string | null;
   size_bytes: number | null;
   ai_summary: string | null;
-  ai_confidence: number | null;
-  document_type: string | null;
-  document_type_confidence: number | null;
-  purpose: string | null;
-  classification_status: string | null;
-  ai_alternatives: Array<{ document_type: string; confidence: number }> | null;
-  ai_reasoning: string | null;
+  primary_document_type: string | null;
+  primary_document_type_confidence: number | null;
+  document_type_candidates: Candidate[] | null;
+  primary_purpose: string | null;
+  primary_purpose_confidence: number | null;
+  purpose_candidates: Candidate[] | null;
+  review_status: string | null;
   created_at: string;
 };
 
@@ -58,16 +44,17 @@ function EvidencePage() {
   const qc = useQueryClient();
   const classify = useServerFn(classifyEvidence);
   const regen = useServerFn(generateTasks);
-  const confirmType = useServerFn(confirmDocumentType);
+  const confirmField = useServerFn(confirmEvidenceField);
   const fileInput = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
+  const [openReview, setOpenReview] = useState<Record<string, boolean>>({});
 
   const evidence = useQuery({
     queryKey: ["evidence", orgId],
     queryFn: async () => {
       const { data, error } = await supabase
         .from("evidence")
-        .select("id, file_name, mime_type, size_bytes, ai_summary, ai_confidence, document_type, document_type_confidence, purpose, classification_status, ai_alternatives, ai_reasoning, created_at")
+        .select("id, file_name, mime_type, size_bytes, ai_summary, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, created_at")
         .eq("org_id", orgId)
         .order("created_at", { ascending: false });
       if (error) throw new Error(error.message);
@@ -76,11 +63,11 @@ function EvidencePage() {
   });
 
   const confirmMut = useMutation({
-    mutationFn: async (args: { evidence_id: string; document_type: string }) => {
-      await confirmType({ data: args });
+    mutationFn: async (args: { evidence_id: string; field: "document_type" | "purpose"; value: string }) => {
+      await confirmField({ data: args });
     },
     onSuccess: () => {
-      toast.success("Document type confirmed");
+      toast.success("Saved");
       qc.invalidateQueries({ queryKey: ["evidence", orgId] });
     },
   });
@@ -113,8 +100,8 @@ function EvidencePage() {
 
       toast.info("Understanding document…");
       const result = await classify({ data: { evidence_id: row.id } });
-      const meta = STATUS_META[(result.classification_status as ClassificationStatus) ?? "unknown"];
-      toast.success(`${result.document_type} — ${meta.label}`);
+      const label = result.primary_document_type ?? "Unknown document";
+      toast.success(`Identified: ${label}`);
 
       if (result.linked_obligation_ids.length > 0) {
         const { assessObligation } = await import("@/lib/ai.functions");
@@ -169,49 +156,40 @@ function EvidencePage() {
         {evidence.data?.length ? (
           <ul className="space-y-3">
             {evidence.data.map((e) => {
-              const status = (e.classification_status as ClassificationStatus) ?? "unknown";
-              const meta = STATUS_META[status] ?? STATUS_META.unknown;
-              const typeConf = Math.round(((e.document_type_confidence ?? 0)) * 100);
-              const alts = (e.ai_alternatives ?? []).filter(a => a.document_type && a.document_type !== e.document_type);
-              // Always give the user a clear way to review/confirm, not only when AI flagged uncertainty.
-              const showAlts = alts.length > 0 || status === "needs_review" || status === "unknown";
+              const review = (e.review_status as ReviewStatus) ?? "unknown";
+              const meta = REVIEW_META[review] ?? REVIEW_META.unknown;
+              const docConf = Math.round(((e.primary_document_type_confidence ?? 0)) * 100);
+              const purConf = Math.round(((e.primary_purpose_confidence ?? 0)) * 100);
+              const docCandidates = (e.document_type_candidates ?? []).filter(c => c?.label);
+              const purCandidates = (e.purpose_candidates ?? []).filter(c => c?.label);
+              const isOpen = !!openReview[e.id];
+
               return (
                 <li key={e.id} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                        <p className="text-sm font-medium">{e.file_name}</p>
-                        <span className="text-xs text-muted-foreground">
-                          {e.mime_type ?? "?"} · {formatBytes(e.size_bytes)} · {new Date(e.created_at).toLocaleString()}
-                        </span>
-                      </div>
-
-                      {/* Document identity */}
-                      <div className="mt-3 grid gap-3 sm:grid-cols-2">
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Document type</p>
-                          <p className="mt-0.5 text-sm font-medium">
-                            {e.document_type ?? "Not identified"}
-                            {e.document_type_confidence != null && (
-                              <span className="ml-2 text-xs font-normal text-muted-foreground">
-                                {typeConf}% confidence
-                              </span>
-                            )}
+                      {/* Header: filename + status */}
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-medium">{e.file_name}</p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {e.mime_type ?? "?"} · {formatBytes(e.size_bytes)} · {new Date(e.created_at).toLocaleString()}
                           </p>
                         </div>
-                        <div>
-                          <p className="text-xs uppercase tracking-wide text-muted-foreground">Purpose</p>
-                          <p className="mt-0.5 text-sm font-medium">{e.purpose ?? "—"}</p>
-                        </div>
-                      </div>
-
-                      {/* Relationship / classification status */}
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${meta.tone}`}>
+                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${meta.tone}`}>
                           {meta.label}
                         </span>
-                        <span className="text-xs text-muted-foreground">{meta.explain}</span>
+                      </div>
+
+                      {/* Clean primary fields */}
+                      <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                        <Field label="Document type" value={e.primary_document_type} />
+                        <Field label="Purpose" value={e.primary_purpose} />
+                        <Field
+                          label="Confidence"
+                          value={e.primary_document_type_confidence != null ? `${docConf}%` : null}
+                        />
                       </div>
 
                       {e.ai_summary && (
@@ -221,49 +199,46 @@ function EvidencePage() {
                         </p>
                       )}
 
-                      {/* AI review — always visible so the user has a clear way to confirm/correct */}
-                      {showAlts && (
-                        <div className="mt-3 rounded-md border border-border/70 bg-muted/30 p-3">
-                          <p className="text-xs font-medium text-foreground">
-                            Review this document
-                          </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            Confirm the AI's guess, pick an alternative, or set your own.
-                          </p>
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            {e.document_type && !e.document_type.startsWith("[") && (
-                              <Button
-                                size="sm"
-                                disabled={confirmMut.isPending}
-                                onClick={() => confirmMut.mutate({ evidence_id: e.id, document_type: e.document_type! })}
-                              >
-                                <Check className="mr-1 h-3 w-3" />
-                                Confirm: {e.document_type} ({typeConf}%)
-                              </Button>
-                            )}
-                            {alts.slice(0, 3).map((a) => (
-                              <Button
-                                key={a.document_type}
-                                size="sm"
-                                variant="outline"
-                                disabled={confirmMut.isPending}
-                                onClick={() => confirmMut.mutate({ evidence_id: e.id, document_type: a.document_type })}
-                              >
-                                {a.document_type} ({Math.round((a.confidence ?? 0) * 100)}%)
-                              </Button>
-                            ))}
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              disabled={confirmMut.isPending}
-                              onClick={() => {
-                                const t = window.prompt("What type of document is this?", e.document_type ?? "");
-                                if (t && t.trim()) confirmMut.mutate({ evidence_id: e.id, document_type: t.trim() });
-                              }}
-                            >
-                              Set custom type…
-                            </Button>
-                          </div>
+                      {/* Review action */}
+                      <div className="mt-3 flex flex-wrap items-center gap-2">
+                        {review !== "confirmed" && e.primary_document_type && (
+                          <Button
+                            size="sm"
+                            disabled={confirmMut.isPending}
+                            onClick={() => confirmMut.mutate({ evidence_id: e.id, field: "document_type", value: e.primary_document_type! })}
+                          >
+                            <Check className="mr-1 h-3 w-3" />
+                            Confirm as {e.primary_document_type}
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setOpenReview((s) => ({ ...s, [e.id]: !s[e.id] }))}
+                        >
+                          {isOpen ? "Hide" : "Review"} suggestions
+                        </Button>
+                      </div>
+
+                      {/* Review panel — only place candidates are ever shown */}
+                      {isOpen && (
+                        <div className="mt-3 space-y-4 rounded-md border border-border/70 bg-muted/30 p-3">
+                          <CandidatePicker
+                            title="Document type"
+                            current={e.primary_document_type}
+                            currentConfidence={docConf}
+                            candidates={docCandidates}
+                            disabled={confirmMut.isPending}
+                            onPick={(value) => confirmMut.mutate({ evidence_id: e.id, field: "document_type", value })}
+                          />
+                          <CandidatePicker
+                            title="Purpose"
+                            current={e.primary_purpose}
+                            currentConfidence={purConf}
+                            candidates={purCandidates}
+                            disabled={confirmMut.isPending}
+                            onPick={(value) => confirmMut.mutate({ evidence_id: e.id, field: "purpose", value })}
+                          />
                         </div>
                       )}
                     </div>
@@ -277,6 +252,69 @@ function EvidencePage() {
             No evidence uploaded yet.
           </p>
         )}
+      </div>
+    </div>
+  );
+}
+
+function Field({ label, value }: { label: string; value: string | null | undefined }) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
+      <p className="mt-0.5 text-sm font-medium">{value?.trim() ? value : "—"}</p>
+    </div>
+  );
+}
+
+function CandidatePicker({
+  title,
+  current,
+  currentConfidence,
+  candidates,
+  disabled,
+  onPick,
+}: {
+  title: string;
+  current: string | null;
+  currentConfidence: number;
+  candidates: Candidate[];
+  disabled: boolean;
+  onPick: (value: string) => void;
+}) {
+  // Show current on top, then any other candidates
+  const shown: Array<Candidate & { isCurrent?: boolean }> = [];
+  if (current) shown.push({ label: current, confidence: currentConfidence / 100, isCurrent: true });
+  for (const c of candidates) {
+    if (!current || c.label !== current) shown.push(c);
+  }
+  return (
+    <div>
+      <p className="text-xs font-medium text-foreground">{title}</p>
+      <p className="mt-0.5 text-xs text-muted-foreground">Pick the correct value or set a custom one.</p>
+      <div className="mt-2 flex flex-wrap gap-2">
+        {shown.slice(0, 4).map((c) => (
+          <Button
+            key={`${title}-${c.label}`}
+            size="sm"
+            variant={c.isCurrent ? "default" : "outline"}
+            disabled={disabled}
+            onClick={() => onPick(c.label)}
+          >
+            {c.isCurrent && <Check className="mr-1 h-3 w-3" />}
+            {c.label} · {Math.round((c.confidence ?? 0) * 100)}%
+          </Button>
+        ))}
+        <Button
+          size="sm"
+          variant="ghost"
+          disabled={disabled}
+          onClick={() => {
+            const t = window.prompt(`Set ${title.toLowerCase()}:`, current ?? "");
+            if (t && t.trim()) onPick(t.trim());
+          }}
+        >
+          Set custom…
+        </Button>
       </div>
     </div>
   );
