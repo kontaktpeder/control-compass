@@ -173,7 +173,8 @@ function EvidencePage() {
               const meta = STATUS_META[status] ?? STATUS_META.unknown;
               const typeConf = Math.round(((e.document_type_confidence ?? 0)) * 100);
               const alts = (e.ai_alternatives ?? []).filter(a => a.document_type && a.document_type !== e.document_type);
-              const showAlts = status === "needs_review" && alts.length > 0;
+              // Always give the user a clear way to review/confirm, not only when AI flagged uncertainty.
+              const showAlts = alts.length > 0 || status === "needs_review" || status === "unknown";
               return (
                 <li key={e.id} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
@@ -220,20 +221,24 @@ function EvidencePage() {
                         </p>
                       )}
 
-                      {/* AI review — one-click confirm alternatives */}
+                      {/* AI review — always visible so the user has a clear way to confirm/correct */}
                       {showAlts && (
                         <div className="mt-3 rounded-md border border-border/70 bg-muted/30 p-3">
-                          <p className="text-xs font-medium text-muted-foreground">AI suggestions — confirm the right one:</p>
+                          <p className="text-xs font-medium text-foreground">
+                            Review this document
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            Confirm the AI's guess, pick an alternative, or set your own.
+                          </p>
                           <div className="mt-2 flex flex-wrap gap-2">
-                            {e.document_type && (
+                            {e.document_type && !e.document_type.startsWith("[") && (
                               <Button
                                 size="sm"
-                                variant="outline"
                                 disabled={confirmMut.isPending}
                                 onClick={() => confirmMut.mutate({ evidence_id: e.id, document_type: e.document_type! })}
                               >
                                 <Check className="mr-1 h-3 w-3" />
-                                {e.document_type} ({typeConf}%)
+                                Confirm: {e.document_type} ({typeConf}%)
                               </Button>
                             )}
                             {alts.slice(0, 3).map((a) => (
@@ -244,10 +249,20 @@ function EvidencePage() {
                                 disabled={confirmMut.isPending}
                                 onClick={() => confirmMut.mutate({ evidence_id: e.id, document_type: a.document_type })}
                               >
-                                <Check className="mr-1 h-3 w-3" />
                                 {a.document_type} ({Math.round((a.confidence ?? 0) * 100)}%)
                               </Button>
                             ))}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              disabled={confirmMut.isPending}
+                              onClick={() => {
+                                const t = window.prompt("What type of document is this?", e.document_type ?? "");
+                                if (t && t.trim()) confirmMut.mutate({ evidence_id: e.id, document_type: t.trim() });
+                              }}
+                            >
+                              Set custom type…
+                            </Button>
                           </div>
                         </div>
                       )}
