@@ -1,11 +1,26 @@
 import { createServerFn } from "@tanstack/react-start";
 import { z } from "zod";
-import { generateObject } from "ai";
+import { generateObject, NoObjectGeneratedError } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createLovableAiGatewayProvider, requireLovableApiKey } from "./ai-gateway.server";
 
+
+function tryParseJson(raw: string | undefined): any {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Try to extract first JSON object from fenced/prose responses
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try { return JSON.parse(m[0]); } catch { return null; }
+  }
+}
+
 const CLASSIFY_MODEL = "google/gemini-2.5-flash";
 const ASSESS_MODEL = "google/gemini-2.5-flash";
+
+
 
 // --- classifyEvidence -------------------------------------------------------
 
@@ -82,16 +97,35 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       });
     }
 
-    const { object: result } = await generateObject({
-      model,
-      messages: [{ role: "user", content: userContent }],
-      schema: z.object({
-        summary: z.string().describe("One-paragraph summary of what this document contains."),
-        suggested_obligation_ids: z.array(z.string()),
-        reasoning: z.string(),
-        confidence: z.number().min(0).max(1),
-      }),
+    const schema = z.object({
+      summary: z.string(),
+      suggested_obligation_ids: z.array(z.string()),
+      reasoning: z.string(),
+      confidence: z.number(),
     });
+    type ClassifyResult = z.infer<typeof schema>;
+    let result: ClassifyResult;
+    try {
+      const gen = await generateObject({
+        model,
+        messages: [{ role: "user", content: userContent }],
+        schema,
+      });
+      result = gen.object;
+    } catch (e) {
+      const raw = NoObjectGeneratedError.isInstance(e) ? (e as { text?: string }).text : undefined;
+      const parsed = tryParseJson(raw);
+      result = {
+        summary: parsed?.summary ?? "AI could not classify this document automatically.",
+        suggested_obligation_ids: Array.isArray(parsed?.suggested_obligation_ids)
+          ? parsed.suggested_obligation_ids.filter((x: unknown) => typeof x === "string")
+          : [],
+        reasoning: parsed?.reasoning ?? (e instanceof Error ? e.message : "Unknown error"),
+        confidence: typeof parsed?.confidence === "number" ? parsed.confidence : 0,
+      };
+    }
+    result.confidence = Math.max(0, Math.min(1, result.confidence));
+
 
     // Persist summary + suggested links
     await supabase
@@ -159,28 +193,50 @@ export const assessObligation = createServerFn({ method: "POST" })
     const provider = createLovableAiGatewayProvider(requireLovableApiKey());
     const model = provider(ASSESS_MODEL);
 
-    const { object: assessment } = await generateObject({
-      model,
-      system:
-        "You assess whether an organizational obligation is supported by the evidence uploaded. " +
-        "Be honest and conservative. Never claim compliance. Only mark 'satisfied' if the required " +
-        "evidence types are clearly present. Otherwise pick 'partially_satisfied', 'missing', " +
-        "'needs_review', or 'unknown'. Provide short reasoning and a list of what's still missing.",
-      prompt: [
-        `Obligation: ${ob.title}`,
-        `Why it exists: ${ob.why ?? "n/a"}`,
-        `Required evidence: ${(ob.evidence_requirements ?? []).join("; ") || "n/a"}`,
-        "",
-        "Available evidence:",
-        evidenceLines,
-      ].join("\n"),
-      schema: z.object({
-        status: z.enum(["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"]),
-        confidence: z.number().min(0).max(1),
-        reasoning: z.string(),
-        missing_evidence: z.array(z.string()),
-      }),
+    const schema = z.object({
+      status: z.enum(["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"]),
+      confidence: z.number(),
+      reasoning: z.string(),
+      missing_evidence: z.array(z.string()),
     });
+    type Assessment = z.infer<typeof schema>;
+    let assessment: Assessment;
+    try {
+      const gen = await generateObject({
+        model,
+        system:
+          "You assess whether an organizational obligation is supported by the evidence uploaded. " +
+          "Be honest and conservative. Never claim compliance. Only mark 'satisfied' if the required " +
+          "evidence types are clearly present. Otherwise pick 'partially_satisfied', 'missing', " +
+          "'needs_review', or 'unknown'. Provide short reasoning and a list of what's still missing.",
+        prompt: [
+          `Obligation: ${ob.title}`,
+          `Why it exists: ${ob.why ?? "n/a"}`,
+          `Required evidence: ${(ob.evidence_requirements ?? []).join("; ") || "n/a"}`,
+          "",
+          "Available evidence:",
+          evidenceLines,
+        ].join("\n"),
+        schema,
+      });
+      assessment = gen.object;
+    } catch (e) {
+      const raw = NoObjectGeneratedError.isInstance(e) ? (e as { text?: string }).text : undefined;
+      const parsed = tryParseJson(raw);
+      const allowed = ["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"] as const;
+      assessment = {
+        status: (allowed as readonly string[]).includes(parsed?.status)
+          ? parsed.status
+          : "needs_review",
+        confidence: typeof parsed?.confidence === "number" ? parsed.confidence : 0,
+        reasoning: parsed?.reasoning ?? (e instanceof Error ? e.message : "Assessment unavailable"),
+        missing_evidence: Array.isArray(parsed?.missing_evidence)
+          ? parsed.missing_evidence.filter((x: unknown) => typeof x === "string")
+          : [],
+      };
+    }
+    assessment.confidence = Math.max(0, Math.min(1, assessment.confidence));
+
 
     await supabase.from("assessments").insert({
       org_id: ob.org_id,
