@@ -83,16 +83,35 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       });
     }
 
-    const { object: result } = await generateObject({
-      model,
-      messages: [{ role: "user", content: userContent }],
-      schema: z.object({
-        summary: z.string().describe("One-paragraph summary of what this document contains."),
-        suggested_obligation_ids: z.array(z.string()),
-        reasoning: z.string(),
-        confidence: z.number().min(0).max(1),
-      }),
+    const schema = z.object({
+      summary: z.string(),
+      suggested_obligation_ids: z.array(z.string()),
+      reasoning: z.string(),
+      confidence: z.number(),
     });
+    type ClassifyResult = z.infer<typeof schema>;
+    let result: ClassifyResult;
+    try {
+      const gen = await generateObject({
+        model,
+        messages: [{ role: "user", content: userContent }],
+        schema,
+      });
+      result = gen.object;
+    } catch (e) {
+      const raw = NoObjectGeneratedError.isInstance(e) ? (e as { text?: string }).text : undefined;
+      const parsed = tryParseJson(raw);
+      result = {
+        summary: parsed?.summary ?? "AI could not classify this document automatically.",
+        suggested_obligation_ids: Array.isArray(parsed?.suggested_obligation_ids)
+          ? parsed.suggested_obligation_ids.filter((x: unknown) => typeof x === "string")
+          : [],
+        reasoning: parsed?.reasoning ?? (e instanceof Error ? e.message : "Unknown error"),
+        confidence: typeof parsed?.confidence === "number" ? parsed.confidence : 0,
+      };
+    }
+    result.confidence = Math.max(0, Math.min(1, result.confidence));
+
 
     // Persist summary + suggested links
     await supabase
