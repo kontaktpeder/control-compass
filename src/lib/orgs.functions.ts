@@ -15,10 +15,14 @@ export const createOrganization = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Debug: check what PostgREST sees as auth.uid()
-    const { data: whoami } = await supabase.rpc as any;
-    const { data: uidCheck, error: uidErr } = await (supabase as any).rpc("get_current_uid").catch((e: any) => ({ data: null, error: e }));
-    console.log("[createOrganization] userId=", userId, "auth.uid()=", uidCheck, "err=", uidErr);
+    // Debug: read auth.uid() as seen by PostgREST
+    const uidRes = await (supabase as any)
+      .from("_uid_probe_missing_ok")
+      .select("*")
+      .limit(0);
+    // Fallback: fetch user via /auth/v1/user with same token
+    const authUser = await supabase.auth.getUser();
+    console.log("[createOrganization] userId=", userId, "authUser=", authUser.data?.user?.id, "authErr=", authUser.error?.message);
 
     const { data: org, error } = await supabase
       .from("organizations")
@@ -30,7 +34,8 @@ export const createOrganization = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) throw new Error(`${error.message} | userId=${userId} auth.uid=${JSON.stringify(uidCheck)}`);
+    if (error) throw new Error(`${error.message} | userId=${userId} authUserId=${authUser.data?.user?.id ?? "null"} authErr=${authUser.error?.message ?? "none"}`);
+
 
 
     const { error: memErr } = await supabase.from("memberships").insert({
