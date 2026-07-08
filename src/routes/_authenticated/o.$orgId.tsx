@@ -26,13 +26,13 @@ function OrgShell() {
     },
   });
 
-  const navItems = [
+  const navItems: Array<{ to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }> = [
     { to: "/o/$orgId", label: "Dashboard", icon: LayoutDashboard, end: true },
     { to: "/o/$orgId/playbook", label: "Playbook", icon: BookOpen },
     { to: "/o/$orgId/obligations", label: "Obligations", icon: ListChecks },
     { to: "/o/$orgId/evidence", label: "Evidence", icon: FileText },
     { to: "/o/$orgId/tasks", label: "Tasks", icon: CheckSquare },
-  ] as const;
+  ];
 
   return (
     <div className="min-h-screen bg-background">
@@ -58,17 +58,12 @@ function OrgShell() {
             {navItems.map((item) => (
               <Link
                 key={item.to}
+                // @ts-expect-error dynamic route path from list
                 to={item.to}
                 params={{ orgId }}
-                activeOptions={{ exact: item.end }}
-                className={({ isActive }: { isActive: boolean }) =>
-                  cn(
-                    "flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition",
-                    isActive
-                      ? "bg-sidebar-accent text-sidebar-accent-foreground font-medium"
-                      : "hover:bg-sidebar-accent/60",
-                  )
-                }
+                activeOptions={{ exact: !!item.end }}
+                activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground font-medium" }}
+                className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition hover:bg-sidebar-accent/60"
               >
                 <item.icon className="h-4 w-4" />
                 {item.label}
