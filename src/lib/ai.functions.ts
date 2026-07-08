@@ -5,8 +5,22 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createLovableAiGatewayProvider, requireLovableApiKey } from "./ai-gateway.server";
 
 
+function tryParseJson(raw: string | undefined): any {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    // Try to extract first JSON object from fenced/prose responses
+    const m = raw.match(/\{[\s\S]*\}/);
+    if (!m) return null;
+    try { return JSON.parse(m[0]); } catch { return null; }
+  }
+}
+
 const CLASSIFY_MODEL = "google/gemini-2.5-flash";
 const ASSESS_MODEL = "google/gemini-2.5-flash";
+
+
 
 // --- classifyEvidence -------------------------------------------------------
 
