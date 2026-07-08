@@ -15,14 +15,11 @@ export const createOrganization = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Debug: read auth.uid() as seen by PostgREST
-    const uidRes = await (supabase as any)
-      .from("_uid_probe_missing_ok")
-      .select("*")
-      .limit(0);
-    // Fallback: fetch user via /auth/v1/user with same token
-    const authUser = await supabase.auth.getUser();
-    console.log("[createOrganization] userId=", userId, "authUser=", authUser.data?.user?.id, "authErr=", authUser.error?.message);
+    // Debug: verify RLS sees us. Read own profile row (RLS: id = auth.uid()).
+    const profRes = await supabase
+      .from("profiles")
+      .select("id, full_name");
+    const profileRows = profRes.data?.length ?? 0;
 
     const { data: org, error } = await supabase
       .from("organizations")
@@ -34,7 +31,8 @@ export const createOrganization = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) throw new Error(`${error.message} | userId=${userId} authUserId=${authUser.data?.user?.id ?? "null"} authErr=${authUser.error?.message ?? "none"}`);
+    if (error) throw new Error(`${error.message} | userId=${userId} profileRows=${profileRows} profErr=${profRes.error?.message ?? "none"}`);
+
 
 
 
