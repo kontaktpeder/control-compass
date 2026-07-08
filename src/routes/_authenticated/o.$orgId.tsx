@@ -2,7 +2,7 @@ import { createFileRoute, Link, Outlet, useNavigate, useParams } from "@tanstack
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { ShieldCheck, LayoutDashboard, ListChecks, FileText, BookOpen, CheckSquare, Building2, LogOut } from "lucide-react";
-import { cn } from "@/lib/utils";
+
 import { Button } from "@/components/ui/button";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId")({
@@ -58,7 +58,6 @@ function OrgShell() {
             {navItems.map((item) => (
               <Link
                 key={item.to}
-                // @ts-expect-error dynamic route path from list
                 to={item.to}
                 params={{ orgId }}
                 activeOptions={{ exact: !!item.end }}
