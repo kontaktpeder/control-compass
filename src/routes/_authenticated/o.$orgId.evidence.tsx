@@ -173,7 +173,8 @@ function EvidencePage() {
               const meta = STATUS_META[status] ?? STATUS_META.unknown;
               const typeConf = Math.round(((e.document_type_confidence ?? 0)) * 100);
               const alts = (e.ai_alternatives ?? []).filter(a => a.document_type && a.document_type !== e.document_type);
-              const showAlts = status === "needs_review" && alts.length > 0;
+              // Always give the user a clear way to review/confirm, not only when AI flagged uncertainty.
+              const showAlts = alts.length > 0 || status === "needs_review" || status === "unknown";
               return (
                 <li key={e.id} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
