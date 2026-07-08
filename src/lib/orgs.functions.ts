@@ -15,12 +15,6 @@ export const createOrganization = createServerFn({ method: "POST" })
   .handler(async ({ data, context }) => {
     const { supabase, userId } = context;
 
-    // Debug: verify RLS sees us. Read own profile row (RLS: id = auth.uid()).
-    const profRes = await supabase
-      .from("profiles")
-      .select("id, full_name");
-    const profileRows = profRes.data?.length ?? 0;
-
     const { data: org, error } = await supabase
       .from("organizations")
       .insert({
@@ -31,7 +25,8 @@ export const createOrganization = createServerFn({ method: "POST" })
       })
       .select()
       .single();
-    if (error) throw new Error(`${error.message} | userId=${userId} profileRows=${profileRows} profErr=${profRes.error?.message ?? "none"}`);
+    if (error) throw new Error(error.message);
+
 
 
 
