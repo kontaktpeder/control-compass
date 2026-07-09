@@ -566,3 +566,56 @@ export const confirmDocumentType = createServerFn({ method: "POST" })
     } as any).eq("id", data.evidence_id);
     return { ok: true };
   });
+
+// --- confirmDocument --------------------------------------------------------
+// One-shot confirmation: set primary document_type + purpose + review_status.
+export const confirmDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({
+      evidence_id: z.string().uuid(),
+      document_type: z.string().min(1).nullish(),
+      purpose: z.string().min(1).nullish(),
+    }).parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    const patch: Record<string, unknown> = { review_status: "confirmed" };
+    if (data.document_type) {
+      const v = data.document_type.trim();
+      patch.primary_document_type = v;
+      patch.primary_document_type_confidence = 1;
+      patch.document_type = v;
+      patch.document_type_confidence = 1;
+    }
+    if (data.purpose) {
+      const v = data.purpose.trim();
+      patch.primary_purpose = v;
+      patch.primary_purpose_confidence = 1;
+      patch.purpose = v;
+    }
+    await supabase.from("evidence").update(patch as any).eq("id", data.evidence_id);
+    return { ok: true };
+  });
+
+// --- rejectDocument ---------------------------------------------------------
+// User rejects the AI classification: reset review_status; optionally unlink.
+export const rejectDocument = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator((input: unknown) =>
+    z.object({
+      evidence_id: z.string().uuid(),
+      unlink: z.boolean().optional().default(false),
+    }).parse(input)
+  )
+  .handler(async ({ data, context }) => {
+    const { supabase } = context;
+    await supabase.from("evidence").update({
+      review_status: "unknown",
+    } as any).eq("id", data.evidence_id);
+    if (data.unlink) {
+      await supabase.from("evidence_links").delete().eq("evidence_id", data.evidence_id);
+    }
+    return { ok: true };
+  });
+
