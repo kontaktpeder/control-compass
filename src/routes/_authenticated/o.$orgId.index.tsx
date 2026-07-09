@@ -68,12 +68,13 @@ function Dashboard() {
   const obs = allObs.filter((o) => o.is_required);
   const recommended = allObs.filter((o) => !o.is_required);
   const total = obs.length;
-  const bucket = (s: Status | undefined) => obs.filter((o) => (o.latest?.status ?? "unknown") === s).length;
+  const bucket = (s: Status) => obs.filter((o) => o.latest?.status === s).length;
   const satisfied = bucket("satisfied");
   const partial = bucket("partially_satisfied");
-  const missing = bucket("missing");
-  const unknown = obs.filter((o) => !o.latest).length;
+  const missing = obs.filter((o) => !o.latest).length;
+  const unknown = 0;
   const recommendedOnFile = recommended.filter((o) => o.latest?.status === "satisfied").length;
+
   const avgConfidence = (() => {
     const withConf = obs.map((o) => o.latest?.confidence ?? null).filter((c): c is number => c != null);
     if (!withConf.length) return null;
