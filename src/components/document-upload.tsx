@@ -30,11 +30,13 @@ export function DocumentUpload({
   orgId,
   hintObligationId,
   context = "library",
+  mode = "upload",
   size = "default",
   variant = "outline",
   label,
   className,
 }: Props) {
+
   const qc = useQueryClient();
   const classify = useServerFn(classifyEvidence);
   const assess = useServerFn(assessObligation);
