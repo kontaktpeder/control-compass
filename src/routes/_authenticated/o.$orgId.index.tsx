@@ -29,23 +29,29 @@ function Dashboard() {
   const dashboard = useQuery({
     queryKey: ["dashboard", orgId],
     queryFn: async () => {
-      const [obs, assess, tasks, steps] = await Promise.all([
+      const [obs, links, tasks, steps] = await Promise.all([
         supabase.from("obligations").select("id, title, playbook_step_id, is_required").eq("org_id", orgId),
-        supabase.from("assessments").select("obligation_id, status, confidence, created_at").eq("org_id", orgId).order("created_at", { ascending: false }),
+        supabase.from("evidence_links").select("obligation_id, status, ai_document_type_confidence").eq("org_id", orgId),
         supabase.from("tasks").select("id, title, status, obligation_id").eq("org_id", orgId).eq("status", "open"),
         supabase.from("playbook_steps").select("id, title, order_index").eq("org_id", orgId).order("order_index"),
       ]);
       if (obs.error) throw new Error(obs.error.message);
-      const latestByOb = new Map<string, { status: Status; confidence: number | null }>();
-      for (const a of assess.data ?? []) if (!latestByOb.has(a.obligation_id)) latestByOb.set(a.obligation_id, { status: a.status as Status, confidence: a.confidence });
+      const byOb = new Map<string, { status: Status; confidence: number | null }>();
+      for (const l of links.data ?? []) {
+        // Derive product Status from assignment status. Verified = satisfied,
+        // needs_review = partial. No row = missing (handled downstream).
+        const s: Status = l.status === "verified" ? "satisfied" : "partially_satisfied";
+        byOb.set(l.obligation_id, { status: s, confidence: l.ai_document_type_confidence ?? null });
+      }
       const obligations: ObligationRow[] = (obs.data ?? []).map((o) => ({
         ...o,
         is_required: (o as { is_required?: boolean }).is_required ?? true,
-        latest: latestByOb.get(o.id) ?? null,
+        latest: byOb.get(o.id) ?? null,
       }));
       return { obligations, tasks: tasks.data ?? [], steps: steps.data ?? [] };
     },
   });
+
 
   const regenMut = useMutation({
     mutationFn: () => regen({ data: { org_id: orgId } }),
