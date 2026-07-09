@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { classifyEvidence, assessObligation, generateTasks } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import { Upload, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,11 +13,14 @@ type Props = {
   /** When set, the upload originates from a workflow requirement and auto-links. */
   hintObligationId?: string;
   context?: "workflow" | "library";
+  /** "upload" = default; "replace" = swap the existing on-file document. */
+  mode?: "upload" | "replace";
   size?: "sm" | "default";
   variant?: "default" | "outline" | "ghost" | "secondary";
   label?: string;
   className?: string;
 };
+
 
 /**
  * Shared upload button. Handles storage upload, evidence row insert,
