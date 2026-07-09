@@ -150,31 +150,67 @@ export type Database = {
       }
       evidence_links: {
         Row: {
+          ai_document_type: string | null
+          ai_document_type_confidence: number | null
+          ai_purpose: string | null
+          ai_purpose_confidence: number | null
           ai_reasoning: string | null
+          ai_reasoning_full: string | null
+          ai_summary: string | null
           created_at: string
+          document_type: string | null
           evidence_id: string
           id: string
           obligation_id: string
           org_id: string
+          purpose: string | null
           relevance: number | null
+          status: string
+          updated_at: string
+          verified_at: string | null
+          verified_by: string | null
         }
         Insert: {
+          ai_document_type?: string | null
+          ai_document_type_confidence?: number | null
+          ai_purpose?: string | null
+          ai_purpose_confidence?: number | null
           ai_reasoning?: string | null
+          ai_reasoning_full?: string | null
+          ai_summary?: string | null
           created_at?: string
+          document_type?: string | null
           evidence_id: string
           id?: string
           obligation_id: string
           org_id: string
+          purpose?: string | null
           relevance?: number | null
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Update: {
+          ai_document_type?: string | null
+          ai_document_type_confidence?: number | null
+          ai_purpose?: string | null
+          ai_purpose_confidence?: number | null
           ai_reasoning?: string | null
+          ai_reasoning_full?: string | null
+          ai_summary?: string | null
           created_at?: string
+          document_type?: string | null
           evidence_id?: string
           id?: string
           obligation_id?: string
           org_id?: string
+          purpose?: string | null
           relevance?: number | null
+          status?: string
+          updated_at?: string
+          verified_at?: string | null
+          verified_by?: string | null
         }
         Relationships: [
           {
@@ -187,7 +223,7 @@ export type Database = {
           {
             foreignKeyName: "evidence_links_obligation_id_fkey"
             columns: ["obligation_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "obligations"
             referencedColumns: ["id"]
           },
