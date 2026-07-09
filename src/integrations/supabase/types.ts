@@ -164,7 +164,9 @@ export type Database = {
           obligation_id: string
           org_id: string
           purpose: string | null
+          rejected_at: string | null
           relevance: number | null
+          replaced_at: string | null
           status: string
           updated_at: string
           verified_at: string | null
@@ -185,7 +187,9 @@ export type Database = {
           obligation_id: string
           org_id: string
           purpose?: string | null
+          rejected_at?: string | null
           relevance?: number | null
+          replaced_at?: string | null
           status?: string
           updated_at?: string
           verified_at?: string | null
@@ -206,7 +210,9 @@ export type Database = {
           obligation_id?: string
           org_id?: string
           purpose?: string | null
+          rejected_at?: string | null
           relevance?: number | null
+          replaced_at?: string | null
           status?: string
           updated_at?: string
           verified_at?: string | null
@@ -517,6 +523,7 @@ export type Database = {
           id: string
           org_id: string
           reference: string | null
+          url: string | null
         }
         Insert: {
           authority: string
@@ -526,6 +533,7 @@ export type Database = {
           id?: string
           org_id: string
           reference?: string | null
+          url?: string | null
         }
         Update: {
           authority?: string
@@ -535,6 +543,7 @@ export type Database = {
           id?: string
           org_id?: string
           reference?: string | null
+          url?: string | null
         }
         Relationships: [
           {
