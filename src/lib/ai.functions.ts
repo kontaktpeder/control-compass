@@ -33,7 +33,15 @@ type ClassificationStatus = typeof CLASSIFICATION_STATUSES[number];
 // --- classifyEvidence -------------------------------------------------------
 export const classifyEvidence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ evidence_id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({
+      evidence_id: z.string().uuid(),
+      // Optional hint: which obligation the user was working on when uploading.
+      hint_obligation_id: z.string().uuid().nullish(),
+      // Where the upload originated. Workflow uploads always link to the hint.
+      upload_context: z.enum(["workflow", "library"]).optional().default("library"),
+    }).parse(input)
+  )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
