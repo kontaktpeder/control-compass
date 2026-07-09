@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { confirmDocument, rejectDocument, assessObligation, generateTasks } from "@/lib/ai.functions";
+import { confirmAssignment, rejectAssignment } from "@/lib/document-assignment.functions";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
@@ -11,35 +11,40 @@ import { cn } from "@/lib/utils";
 
 export type Candidate = { label: string; confidence: number };
 
-export type ReviewEvidence = {
-  id: string;
-  org_id: string;
+/** What the review panel needs to operate. Sourced from an assignment row +
+ *  its evidence + candidate hints from the evidence AI pass. */
+export type ReviewAssignment = {
+  assignment_id: string;
+  obligation_id: string;
+  obligation_title: string;
+  status: "needs_review" | "verified";
+  // Evidence file
+  evidence_id: string;
   file_name: string;
   file_path: string;
-  primary_document_type: string | null;
-  primary_document_type_confidence: number | null;
+  // Values (confirmed > AI suggestion)
+  document_type: string | null;
+  purpose: string | null;
+  ai_document_type: string | null;
+  ai_document_type_confidence: number | null;
+  ai_purpose: string | null;
+  ai_purpose_confidence: number | null;
   document_type_candidates: Candidate[] | null;
-  primary_purpose: string | null;
-  primary_purpose_confidence: number | null;
   purpose_candidates: Candidate[] | null;
-  review_status: string | null;
   ai_summary: string | null;
   ai_reasoning: string | null;
-  links?: Array<{ obligation_id: string; title: string }>;
 };
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  evidence: ReviewEvidence | null;
+  assignment: ReviewAssignment | null;
 };
 
-export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
+export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
   const qc = useQueryClient();
-  const confirmFn = useServerFn(confirmDocument);
-  const rejectFn = useServerFn(rejectDocument);
-  const assessFn = useServerFn(assessObligation);
-  const regenFn = useServerFn(generateTasks);
+  const confirmFn = useServerFn(confirmAssignment);
+  const rejectFn = useServerFn(rejectAssignment);
 
   const [editing, setEditing] = useState(false);
   const [docType, setDocType] = useState("");
@@ -47,33 +52,38 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (evidence) {
-      setDocType(evidence.primary_document_type ?? "");
-      setPurpose(evidence.primary_purpose ?? "");
+    if (assignment) {
+      setDocType(assignment.document_type ?? assignment.ai_document_type ?? "");
+      setPurpose(assignment.purpose ?? assignment.ai_purpose ?? "");
       setEditing(false);
     }
-  }, [evidence?.id]);
+  }, [assignment?.assignment_id]);
 
-  if (!evidence) return null;
+  if (!assignment) return null;
 
-  const docConf = Math.round((evidence.primary_document_type_confidence ?? 0) * 100);
-  const purConf = Math.round((evidence.primary_purpose_confidence ?? 0) * 100);
-  const docCandidates = (evidence.document_type_candidates ?? []).filter((c) => c?.label);
-  const purCandidates = (evidence.purpose_candidates ?? []).filter((c) => c?.label);
+  const docConf = Math.round((assignment.ai_document_type_confidence ?? 0) * 100);
+  const purConf = Math.round((assignment.ai_purpose_confidence ?? 0) * 100);
+  const docCandidates = (assignment.document_type_candidates ?? []).filter((c) => c?.label);
+  const purCandidates = (assignment.purpose_candidates ?? []).filter((c) => c?.label);
+
+  const suggestedDoc = assignment.document_type ?? assignment.ai_document_type;
+  const suggestedPurpose = assignment.purpose ?? assignment.ai_purpose;
 
   const runAfterChange = async () => {
-    if (evidence.links?.length) {
-      await Promise.all(evidence.links.map((l) => assessFn({ data: { obligation_id: l.obligation_id } })));
-      await regenFn({ data: { org_id: evidence.org_id } });
-    }
     await qc.invalidateQueries();
   };
 
   const handleConfirm = async (type: string, purposeValue: string) => {
     setBusy(true);
     try {
-      await confirmFn({ data: { evidence_id: evidence.id, document_type: type, purpose: purposeValue } });
-      toast.success("Confirmed");
+      await confirmFn({
+        data: {
+          assignment_id: assignment.assignment_id,
+          document_type: type,
+          purpose: purposeValue,
+        },
+      });
+      toast.success("Verified");
       await runAfterChange();
       onOpenChange(false);
     } catch (e) {
@@ -86,8 +96,8 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
   const handleReject = async () => {
     setBusy(true);
     try {
-      await rejectFn({ data: { evidence_id: evidence.id, unlink: false } });
-      toast.info("Marked as unknown — the AI classification was rejected");
+      await rejectFn({ data: { assignment_id: assignment.assignment_id } });
+      toast.info("Reset to needs review");
       await runAfterChange();
       onOpenChange(false);
     } catch (e) {
@@ -98,7 +108,9 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
   };
 
   const openFile = async () => {
-    const { data, error } = await supabase.storage.from("evidence").createSignedUrl(evidence.file_path, 60);
+    const { data, error } = await supabase.storage
+      .from("evidence")
+      .createSignedUrl(assignment.file_path, 60);
     if (error || !data?.signedUrl) {
       toast.error(error?.message ?? "Could not open file");
       return;
@@ -106,17 +118,19 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
-  const canOneClickConfirm =
-    !editing && !!evidence.primary_document_type && !!evidence.primary_purpose;
+  const canOneClickConfirm = !editing && !!suggestedDoc && !!suggestedPurpose;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
           <p className="eyebrow">Review document</p>
-          <SheetTitle className="mt-1 text-xl">Confirm what this document is</SheetTitle>
+          <SheetTitle className="mt-1 text-xl">
+            Confirm what this document is
+          </SheetTitle>
           <SheetDescription>
-            The AI suggested a classification. Confirm, edit, or reject it.
+            Assigned to <span className="font-medium text-foreground">{assignment.obligation_title}</span>.
+            Confirm the AI's suggestion, edit it, or reject it.
           </SheetDescription>
         </SheetHeader>
 
@@ -127,7 +141,7 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
           >
             <div className="flex min-w-0 items-center gap-2">
               <FileText className="h-4 w-4 shrink-0 text-primary" />
-              <span className="truncate text-sm font-medium">{evidence.file_name}</span>
+              <span className="truncate text-sm font-medium">{assignment.file_name}</span>
             </div>
             <ExternalLink className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           </button>
@@ -136,24 +150,14 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
             <div className="space-y-4">
               <ReviewField
                 label="Document type"
-                value={evidence.primary_document_type}
-                confidence={docConf}
+                value={suggestedDoc}
+                confidence={assignment.document_type ? null : docConf}
               />
               <ReviewField
                 label="Purpose"
-                value={evidence.primary_purpose}
-                confidence={purConf}
+                value={suggestedPurpose}
+                confidence={assignment.purpose ? null : purConf}
               />
-              {evidence.links && evidence.links.length > 0 && (
-                <div>
-                  <p className="text-xs uppercase tracking-wide text-muted-foreground">Linked to</p>
-                  <ul className="mt-1 space-y-0.5">
-                    {evidence.links.map((l) => (
-                      <li key={l.obligation_id} className="text-sm">{l.title}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
             </div>
           ) : (
             <div className="space-y-4">
@@ -172,18 +176,18 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
             </div>
           )}
 
-          {(evidence.ai_summary || evidence.ai_reasoning) && (
+          {(assignment.ai_summary || assignment.ai_reasoning) && (
             <div className="rounded-md border border-border/70 bg-muted/30 p-3">
               <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
                 <Sparkles className="h-3 w-3 text-primary" />
                 AI reasoning
               </p>
-              {evidence.ai_summary && (
-                <p className="mt-2 text-sm text-muted-foreground">{evidence.ai_summary}</p>
+              {assignment.ai_summary && (
+                <p className="mt-2 text-sm text-muted-foreground">{assignment.ai_summary}</p>
               )}
-              {evidence.ai_reasoning && (
+              {assignment.ai_reasoning && (
                 <p className="mt-2 whitespace-pre-line text-xs text-muted-foreground/80">
-                  {evidence.ai_reasoning}
+                  {assignment.ai_reasoning}
                 </p>
               )}
             </div>
@@ -194,19 +198,26 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
               <>
                 <Button
                   disabled={busy || !canOneClickConfirm}
-                  onClick={() => handleConfirm(evidence.primary_document_type!, evidence.primary_purpose!)}
+                  onClick={() => handleConfirm(suggestedDoc!, suggestedPurpose!)}
                 >
                   <Check className="mr-1 h-4 w-4" />
-                  Confirm
+                  Confirm & verify
                 </Button>
                 <Button variant="outline" disabled={busy} onClick={() => setEditing(true)}>
                   <Pencil className="mr-1 h-4 w-4" />
-                  Edit classification
+                  Edit
                 </Button>
-                <Button variant="ghost" disabled={busy} onClick={handleReject} className="text-muted-foreground">
-                  <X className="mr-1 h-4 w-4" />
-                  Reject
-                </Button>
+                {assignment.status === "verified" ? null : (
+                  <Button
+                    variant="ghost"
+                    disabled={busy}
+                    onClick={handleReject}
+                    className="text-muted-foreground"
+                  >
+                    <X className="mr-1 h-4 w-4" />
+                    Reject suggestion
+                  </Button>
+                )}
               </>
             ) : (
               <>
@@ -215,7 +226,7 @@ export function DocumentReviewPanel({ open, onOpenChange, evidence }: Props) {
                   onClick={() => handleConfirm(docType.trim(), purpose.trim())}
                 >
                   <Check className="mr-1 h-4 w-4" />
-                  Save & confirm
+                  Save & verify
                 </Button>
                 <Button variant="ghost" disabled={busy} onClick={() => setEditing(false)}>
                   Cancel
@@ -236,15 +247,15 @@ function ReviewField({
 }: {
   label: string;
   value: string | null;
-  confidence: number;
+  confidence: number | null;
 }) {
   return (
     <div>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <div className="mt-0.5 flex items-baseline gap-2">
         <p className="text-sm font-medium">{value?.trim() ? value : "—"}</p>
-        {value && (
-          <span className="text-xs text-muted-foreground">{confidence}%</span>
+        {value && confidence != null && (
+          <span className="text-xs text-muted-foreground">AI {confidence}%</span>
         )}
       </div>
     </div>

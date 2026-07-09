@@ -1,12 +1,12 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
 import { DocumentUpload } from "@/components/document-upload";
-import { DocumentReviewPanel, type ReviewEvidence } from "@/components/document-review-panel";
+import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { toast } from "sonner";
 import { FileText, ChevronRight, ExternalLink } from "lucide-react";
 
@@ -16,18 +16,26 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/workflows")({
 
 type EvidenceLite = {
   id: string;
-  org_id: string;
   file_name: string;
   file_path: string;
-  primary_document_type: string | null;
-  primary_document_type_confidence: number | null;
   document_type_candidates: Array<{ label: string; confidence: number }> | null;
-  primary_purpose: string | null;
-  primary_purpose_confidence: number | null;
   purpose_candidates: Array<{ label: string; confidence: number }> | null;
-  review_status: string | null;
+};
+
+type Assignment = {
+  id: string;
+  obligation_id: string;
+  evidence_id: string;
+  status: "needs_review" | "verified";
+  document_type: string | null;
+  purpose: string | null;
+  ai_document_type: string | null;
+  ai_document_type_confidence: number | null;
+  ai_purpose: string | null;
+  ai_purpose_confidence: number | null;
   ai_summary: string | null;
-  ai_reasoning: string | null;
+  ai_reasoning_full: string | null;
+  evidence: EvidenceLite | null;
 };
 
 type ObligationRow = {
@@ -40,9 +48,37 @@ type ObligationRow = {
   is_required: boolean | null;
 };
 
+function toReview(a: Assignment, ob: { id: string; title: string }): ReviewAssignment | null {
+  if (!a.evidence) return null;
+  return {
+    assignment_id: a.id,
+    obligation_id: ob.id,
+    obligation_title: ob.title,
+    status: a.status,
+    evidence_id: a.evidence.id,
+    file_name: a.evidence.file_name,
+    file_path: a.evidence.file_path,
+    document_type: a.document_type,
+    purpose: a.purpose,
+    ai_document_type: a.ai_document_type,
+    ai_document_type_confidence: a.ai_document_type_confidence,
+    ai_purpose: a.ai_purpose,
+    ai_purpose_confidence: a.ai_purpose_confidence,
+    document_type_candidates: a.evidence.document_type_candidates,
+    purpose_candidates: a.evidence.purpose_candidates,
+    ai_summary: a.ai_summary,
+    ai_reasoning: a.ai_reasoning_full,
+  };
+}
+
+function lifecycleFor(a: Assignment | undefined): DocLifecycle {
+  if (!a) return "no_document";
+  return a.status === "verified" ? "on_file" : "needs_review";
+}
+
 function WorkflowsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/workflows" });
-  const [reviewing, setReviewing] = useState<ReviewEvidence | null>(null);
+  const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
 
   const data = useQuery({
     queryKey: ["workflows", orgId],
@@ -51,23 +87,24 @@ function WorkflowsPage() {
         supabase.from("playbooks").select("id, name, slug").eq("org_id", orgId).eq("slug", "incorporate_company").maybeSingle(),
         supabase.from("playbook_steps").select("id, title, description, order_index").eq("org_id", orgId).order("order_index"),
         supabase.from("obligations").select("id, title, why, playbook_step_id, evidence_requirements, responsible, is_required").eq("org_id", orgId),
-        supabase.from("evidence_links").select("obligation_id, evidence:evidence_id(id, org_id, file_name, file_path, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, ai_summary, ai_reasoning)").eq("org_id", orgId),
+        supabase
+          .from("evidence_links")
+          .select(
+            "id, obligation_id, evidence_id, status, document_type, purpose, ai_document_type, ai_document_type_confidence, ai_purpose, ai_purpose_confidence, ai_summary, ai_reasoning_full, evidence:evidence_id(id, file_name, file_path, document_type_candidates, purpose_candidates)"
+          )
+          .eq("org_id", orgId),
       ]);
 
-      const linkedByOb = new Map<string, EvidenceLite[]>();
-      for (const l of links.data ?? []) {
-        const e = l.evidence as unknown as EvidenceLite | null;
-        if (!e || !l.obligation_id) continue;
-        const arr = linkedByOb.get(l.obligation_id) ?? [];
-        arr.push(e);
-        linkedByOb.set(l.obligation_id, arr);
+      const byOb = new Map<string, Assignment>();
+      for (const l of (links.data ?? []) as unknown as Assignment[]) {
+        if (l.obligation_id) byOb.set(l.obligation_id, l);
       }
 
       return {
         pb: pb.data,
         steps: steps.data ?? [],
         obs: (obs.data ?? []) as ObligationRow[],
-        linkedByOb,
+        byOb,
       };
     },
   });
@@ -86,8 +123,8 @@ function WorkflowsPage() {
           const stepObs = (data.data?.obs ?? []).filter((o) => o.playbook_step_id === step.id);
           const required = stepObs.filter((o) => o.is_required !== false);
           const company = stepObs.filter((o) => o.is_required === false);
-          const linkedByOb = data.data!.linkedByOb;
-          const done = required.filter((o) => primaryLifecycle(linkedByOb.get(o.id) ?? []) === "on_file").length;
+          const byOb = data.data!.byOb;
+          const done = required.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
 
           return (
             <Card key={step.id}>
@@ -110,7 +147,7 @@ function WorkflowsPage() {
                     title="Required documents"
                     subtitle="Legally required for this step."
                     obligations={required}
-                    linkedByOb={linkedByOb}
+                    byOb={byOb}
                     onReview={setReviewing}
                     stepTitle={step.title}
                   />
@@ -121,7 +158,7 @@ function WorkflowsPage() {
                     title="Company documents"
                     subtitle="Recommended internal agreements. Not required by law, but good practice."
                     obligations={company}
-                    linkedByOb={linkedByOb}
+                    byOb={byOb}
                     onReview={setReviewing}
                     stepTitle={step.title}
                   />
@@ -134,17 +171,13 @@ function WorkflowsPage() {
 
       <DocumentReviewPanel
         open={!!reviewing}
-        onOpenChange={(v) => !v && setReviewing(null)}
-        evidence={reviewing}
+        onOpenChange={(v) => {
+          if (!v) setReviewing(null);
+        }}
+        assignment={reviewing}
       />
     </div>
   );
-}
-
-function primaryLifecycle(evidence: EvidenceLite[]): DocLifecycle {
-  if (evidence.length === 0) return "no_document";
-  if (evidence.some((e) => e.review_status === "confirmed")) return "on_file";
-  return "needs_review";
 }
 
 function ObligationSection({
@@ -152,7 +185,7 @@ function ObligationSection({
   title,
   subtitle,
   obligations,
-  linkedByOb,
+  byOb,
   onReview,
   stepTitle,
 }: {
@@ -160,8 +193,8 @@ function ObligationSection({
   title: string;
   subtitle: string;
   obligations: ObligationRow[];
-  linkedByOb: Map<string, EvidenceLite[]>;
-  onReview: (ev: ReviewEvidence) => void;
+  byOb: Map<string, Assignment>;
+  onReview: (a: ReviewAssignment) => void;
   stepTitle: string;
 }) {
   return (
@@ -172,9 +205,16 @@ function ObligationSection({
       </div>
       <ul className="divide-y divide-border rounded-md border border-border/70">
         {obligations.map((o) => {
-          const evidence = linkedByOb.get(o.id) ?? [];
-          const lifecycle = primaryLifecycle(evidence);
-          const primary = evidence.find((e) => e.review_status === "confirmed") ?? evidence[0] ?? null;
+          const assignment = byOb.get(o.id);
+          const lifecycle = lifecycleFor(assignment);
+          const ev = assignment?.evidence ?? null;
+          const displayType = assignment?.document_type ?? assignment?.ai_document_type ?? null;
+
+          const openReview = () => {
+            if (!assignment) return;
+            const r = toReview(assignment, { id: o.id, title: o.title });
+            if (r) onReview(r);
+          };
 
           return (
             <li key={o.id} className="p-4">
@@ -185,9 +225,7 @@ function ObligationSection({
                     <button
                       type="button"
                       onClick={() => {
-                        if (lifecycle === "needs_review" && primary) {
-                          onReview({ ...primary, links: [{ obligation_id: o.id, title: o.title }] });
-                        }
+                        if (lifecycle === "needs_review") openReview();
                       }}
                       className={lifecycle === "needs_review" ? "cursor-pointer" : "cursor-default"}
                     >
@@ -201,12 +239,12 @@ function ObligationSection({
                     </p>
                   )}
 
-                  {primary ? (
+                  {ev ? (
                     <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                       <FileText className="h-3.5 w-3.5 text-primary" />
-                      <span className="truncate">{primary.file_name}</span>
-                      {primary.primary_document_type && (
-                        <span className="text-muted-foreground/70">· {primary.primary_document_type}</span>
+                      <span className="truncate">{ev.file_name}</span>
+                      {displayType && (
+                        <span className="text-muted-foreground/70">· {displayType}</span>
                       )}
                     </div>
                   ) : (
@@ -225,17 +263,12 @@ function ObligationSection({
                       label="Upload"
                     />
                   )}
-                  {lifecycle === "needs_review" && primary && (
-                    <Button
-                      size="sm"
-                      onClick={() =>
-                        onReview({ ...primary, links: [{ obligation_id: o.id, title: o.title }] })
-                      }
-                    >
+                  {lifecycle === "needs_review" && assignment && (
+                    <Button size="sm" onClick={openReview}>
                       Review now
                     </Button>
                   )}
-                  {lifecycle === "on_file" && primary && (
+                  {lifecycle === "on_file" && ev && assignment && (
                     <>
                       <Button
                         size="sm"
@@ -243,7 +276,7 @@ function ObligationSection({
                         onClick={async () => {
                           const { data, error } = await supabase.storage
                             .from("evidence")
-                            .createSignedUrl(primary.file_path, 60);
+                            .createSignedUrl(ev.file_path, 60);
                           if (error || !data?.signedUrl) {
                             toast.error(error?.message ?? "Could not open file");
                             return;
@@ -259,6 +292,7 @@ function ObligationSection({
                         hintObligationId={o.id}
                         context="workflow"
                         mode="replace"
+                        assignmentId={assignment.id}
                         size="sm"
                         variant="ghost"
                         label="Replace"

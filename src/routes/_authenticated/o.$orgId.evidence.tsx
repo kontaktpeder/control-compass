@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { DocumentUpload } from "@/components/document-upload";
 import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
-import { DocumentReviewPanel, type ReviewEvidence } from "@/components/document-review-panel";
+import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { toast } from "sonner";
 import { FileText, Sparkles, Link2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -17,7 +17,20 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
 
 type Candidate = { label: string; confidence: number };
 
-type LinkRow = { id: string; obligation_id: string; title: string };
+type AssignmentRow = {
+  id: string;
+  evidence_id: string;
+  obligation_id: string;
+  status: "needs_review" | "verified";
+  document_type: string | null;
+  purpose: string | null;
+  ai_document_type: string | null;
+  ai_document_type_confidence: number | null;
+  ai_purpose: string | null;
+  ai_purpose_confidence: number | null;
+  ai_summary: string | null;
+  ai_reasoning_full: string | null;
+};
 
 type EvidenceRow = {
   id: string;
@@ -27,16 +40,18 @@ type EvidenceRow = {
   mime_type: string | null;
   size_bytes: number | null;
   ai_summary: string | null;
-  ai_reasoning: string | null;
   primary_document_type: string | null;
   primary_document_type_confidence: number | null;
   document_type_candidates: Candidate[] | null;
   primary_purpose: string | null;
-  primary_purpose_confidence: number | null;
   purpose_candidates: Candidate[] | null;
-  review_status: string | null;
   created_at: string;
-  links: LinkRow[];
+};
+
+type DocView = EvidenceRow & {
+  assignment: AssignmentRow | null;
+  obligation: { id: string; title: string; is_required: boolean } | null;
+  isInternal: boolean;
 };
 
 type Tab = "all" | "needs_review" | "linked" | "internal" | "unlinked";
@@ -55,42 +70,46 @@ const INTERNAL_TYPE_HINTS = [
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
   const [tab, setTab] = useState<Tab>("all");
-  const [reviewing, setReviewing] = useState<ReviewEvidence | null>(null);
+  const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
 
   const documents = useQuery({
     queryKey: ["documents", orgId],
     queryFn: async () => {
       const [ev, links, obs] = await Promise.all([
         supabase.from("evidence")
-          .select("id, org_id, file_name, file_path, mime_type, size_bytes, ai_summary, ai_reasoning, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, created_at")
+          .select("id, org_id, file_name, file_path, mime_type, size_bytes, ai_summary, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, purpose_candidates, created_at")
           .eq("org_id", orgId)
           .order("created_at", { ascending: false }),
-        supabase.from("evidence_links").select("id, evidence_id, obligation_id").eq("org_id", orgId),
+        supabase.from("evidence_links")
+          .select("id, evidence_id, obligation_id, status, document_type, purpose, ai_document_type, ai_document_type_confidence, ai_purpose, ai_purpose_confidence, ai_summary, ai_reasoning_full")
+          .eq("org_id", orgId),
         supabase.from("obligations").select("id, title, is_required").eq("org_id", orgId),
       ]);
       if (ev.error) throw new Error(ev.error.message);
 
-      const obTitle = new Map<string, string>();
-      const obRequired = new Map<string, boolean>();
+      const obById = new Map<string, { id: string; title: string; is_required: boolean }>();
       for (const o of obs.data ?? []) {
-        obTitle.set(o.id, o.title);
-        obRequired.set(o.id, (o as { is_required?: boolean }).is_required ?? true);
+        obById.set(o.id, {
+          id: o.id,
+          title: o.title,
+          is_required: (o as { is_required?: boolean }).is_required ?? true,
+        });
       }
-      const linksByEv = new Map<string, LinkRow[]>();
-      for (const l of links.data ?? []) {
-        const arr = linksByEv.get(l.evidence_id) ?? [];
-        arr.push({ id: l.id, obligation_id: l.obligation_id, title: obTitle.get(l.obligation_id) ?? "Unknown" });
-        linksByEv.set(l.evidence_id, arr);
+      const assignmentByEv = new Map<string, AssignmentRow>();
+      for (const l of (links.data ?? []) as unknown as AssignmentRow[]) {
+        // v1: at most one assignment per evidence created through the upload flow.
+        if (!assignmentByEv.has(l.evidence_id)) assignmentByEv.set(l.evidence_id, l);
       }
+
       return (ev.data ?? []).map((row) => {
-        const rowLinks = linksByEv.get(row.id) ?? [];
-        const linksToRecommended = rowLinks.some((l) => obRequired.get(l.obligation_id) === false);
+        const assignment = assignmentByEv.get(row.id) ?? null;
+        const obligation = assignment ? obById.get(assignment.obligation_id) ?? null : null;
         const type = (row.primary_document_type ?? "").toLowerCase();
         const isInternal =
-          linksToRecommended ||
-          (rowLinks.length === 0 && INTERNAL_TYPE_HINTS.some((h) => type.includes(h)));
-        return { ...row, links: rowLinks, isInternal };
-      }) as unknown as Array<EvidenceRow & { isInternal: boolean }>;
+          (obligation && !obligation.is_required) ||
+          (!assignment && INTERNAL_TYPE_HINTS.some((h) => type.includes(h)));
+        return { ...row, assignment, obligation, isInternal: Boolean(isInternal) } as DocView;
+      });
     },
   });
 
@@ -98,16 +117,16 @@ function DocumentsPage() {
     const list = documents.data ?? [];
     const counts = {
       all:          list.length,
-      needs_review: list.filter((d) => (d.review_status ?? "unknown") !== "confirmed").length,
-      linked:       list.filter((d) => d.links.length > 0).length,
+      needs_review: list.filter((d) => d.assignment?.status === "needs_review").length,
+      linked:       list.filter((d) => !!d.assignment).length,
       internal:     list.filter((d) => d.isInternal).length,
-      unlinked:     list.filter((d) => d.links.length === 0).length,
+      unlinked:     list.filter((d) => !d.assignment).length,
     };
     const visible = list.filter((d) => {
-      if (tab === "needs_review") return (d.review_status ?? "unknown") !== "confirmed";
-      if (tab === "linked") return d.links.length > 0;
+      if (tab === "needs_review") return d.assignment?.status === "needs_review";
+      if (tab === "linked") return !!d.assignment;
       if (tab === "internal") return d.isInternal;
-      if (tab === "unlinked") return d.links.length === 0;
+      if (tab === "unlinked") return !d.assignment;
       return true;
     });
     return { visible, counts };
@@ -121,22 +140,27 @@ function DocumentsPage() {
     { id: "unlinked",     label: `Unlinked · ${counts.unlinked}` },
   ];
 
-  const openReview = (e: EvidenceRow) => {
+  const openReview = (d: DocView) => {
+    if (!d.assignment || !d.obligation) return;
+    const a = d.assignment;
     setReviewing({
-      id: e.id,
-      org_id: e.org_id,
-      file_name: e.file_name,
-      file_path: e.file_path,
-      primary_document_type: e.primary_document_type,
-      primary_document_type_confidence: e.primary_document_type_confidence,
-      document_type_candidates: e.document_type_candidates,
-      primary_purpose: e.primary_purpose,
-      primary_purpose_confidence: e.primary_purpose_confidence,
-      purpose_candidates: e.purpose_candidates,
-      review_status: e.review_status,
-      ai_summary: e.ai_summary,
-      ai_reasoning: e.ai_reasoning,
-      links: e.links.map((l) => ({ obligation_id: l.obligation_id, title: l.title })),
+      assignment_id: a.id,
+      obligation_id: d.obligation.id,
+      obligation_title: d.obligation.title,
+      status: a.status,
+      evidence_id: d.id,
+      file_name: d.file_name,
+      file_path: d.file_path,
+      document_type: a.document_type,
+      purpose: a.purpose,
+      ai_document_type: a.ai_document_type,
+      ai_document_type_confidence: a.ai_document_type_confidence,
+      ai_purpose: a.ai_purpose,
+      ai_purpose_confidence: a.ai_purpose_confidence,
+      document_type_candidates: d.document_type_candidates,
+      purpose_candidates: d.purpose_candidates,
+      ai_summary: a.ai_summary ?? d.ai_summary,
+      ai_reasoning: a.ai_reasoning_full,
     });
   };
 
@@ -190,66 +214,77 @@ function DocumentsPage() {
 
         {visible.length ? (
           <ul className="space-y-3">
-            {visible.map((e) => {
-              const lifecycle: DocLifecycle =
-                e.review_status === "confirmed" ? "on_file" : "needs_review";
-              const docConf = Math.round(((e.primary_document_type_confidence ?? 0)) * 100);
+            {visible.map((d) => {
+              const a = d.assignment;
+              const lifecycle: DocLifecycle = !a
+                ? "no_document"
+                : a.status === "verified"
+                ? "on_file"
+                : "needs_review";
+              const displayType = a?.document_type ?? a?.ai_document_type ?? d.primary_document_type;
+              const displayPurpose = a?.purpose ?? a?.ai_purpose ?? d.primary_purpose;
+              const conf =
+                a?.ai_document_type_confidence ?? d.primary_document_type_confidence ?? null;
 
               return (
-                <li key={e.id} className="rounded-lg border border-border bg-card p-4">
+                <li key={d.id} className="rounded-lg border border-border bg-card p-4">
                   <div className="flex items-start gap-3">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{e.file_name}</p>
+                          <p className="truncate text-sm font-medium">{d.file_name}</p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {e.mime_type ?? "?"} · {formatBytes(e.size_bytes)} · {new Date(e.created_at).toLocaleString()}
+                            {d.mime_type ?? "?"} · {formatBytes(d.size_bytes)} ·{" "}
+                            {new Date(d.created_at).toLocaleString()}
                           </p>
                         </div>
-                        <DocumentStatusPill state={lifecycle} />
+                        {a ? (
+                          <DocumentStatusPill state={lifecycle} />
+                        ) : (
+                          <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                            Unlinked
+                          </span>
+                        )}
                       </div>
 
                       <div className="mt-3 grid gap-3 sm:grid-cols-3">
-                        <Field label="Document type" value={e.primary_document_type} />
-                        <Field label="Purpose" value={e.primary_purpose} />
+                        <Field label="Document type" value={displayType} />
+                        <Field label="Purpose" value={displayPurpose} />
                         <Field
                           label="Confidence"
-                          value={e.primary_document_type_confidence != null ? `${docConf}%` : null}
+                          value={conf != null ? `${Math.round(conf * 100)}%` : null}
                         />
                       </div>
 
-                      {e.ai_summary && (
+                      {d.ai_summary && (
                         <p className="mt-3 flex items-start gap-1.5 text-sm text-muted-foreground">
                           <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                          <span>{e.ai_summary}</span>
+                          <span>{d.ai_summary}</span>
                         </p>
                       )}
 
-                      {e.links.length > 0 && (
+                      {d.obligation && (
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                           <Link2 className="h-3 w-3 text-primary" />
                           <span className="text-muted-foreground">Linked to:</span>
-                          {e.links.map((l) => (
-                            <Link
-                              key={l.id}
-                              to="/o/$orgId/obligations/$id"
-                              params={{ orgId, id: l.obligation_id }}
-                              className="rounded-md bg-muted px-2 py-0.5 hover:bg-muted/70 hover:underline"
-                            >
-                              {l.title}
-                            </Link>
-                          ))}
+                          <Link
+                            to="/o/$orgId/obligations/$id"
+                            params={{ orgId, id: d.obligation.id }}
+                            className="rounded-md bg-muted px-2 py-0.5 hover:bg-muted/70 hover:underline"
+                          >
+                            {d.obligation.title}
+                          </Link>
                         </div>
                       )}
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {lifecycle === "needs_review" ? (
-                          <Button size="sm" onClick={() => openReview(e)}>
+                        {a && lifecycle === "needs_review" ? (
+                          <Button size="sm" onClick={() => openReview(d)}>
                             Review now
                           </Button>
                         ) : (
-                          <Button size="sm" variant="outline" onClick={() => openFile(e.file_path)}>
+                          <Button size="sm" variant="outline" onClick={() => openFile(d.file_path)}>
                             <ExternalLink className="mr-1 h-3 w-3" />
                             View
                           </Button>
@@ -270,8 +305,10 @@ function DocumentsPage() {
 
       <DocumentReviewPanel
         open={!!reviewing}
-        onOpenChange={(v) => !v && setReviewing(null)}
-        evidence={reviewing}
+        onOpenChange={(v) => {
+          if (!v) setReviewing(null);
+        }}
+        assignment={reviewing}
       />
     </div>
   );

@@ -275,29 +275,20 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       classification_status = "needs_review";
     }
 
-    // Review status: needs_review unless AI is very confident on both dimensions.
-    const highConfidence =
-      (primaryDoc?.confidence ?? 0) >= 0.85 &&
-      (primaryPurpose?.confidence ?? 0) >= 0.7;
-    const review_status: "confirmed" | "needs_review" | "unknown" = !primaryDoc
-      ? "unknown"
-      : highConfidence
-        ? "confirmed"
-        : "needs_review";
 
-    // --- Stage 4: persist clean primary fields + candidates for audit ---
+
+
+    // --- Stage 4: persist AI metadata on evidence (candidates only, no product status) ---
     await supabase.from("evidence").update({
       ai_summary: identified.summary,
       ai_confidence: primaryDoc?.confidence ?? 0,
-      // Clean primary fields (rendered on cards):
       primary_document_type: primaryDoc?.label ?? null,
       primary_document_type_confidence: primaryDoc?.confidence ?? null,
       document_type_candidates: docCandidates as unknown as any,
       primary_purpose: primaryPurpose?.label ?? null,
       primary_purpose_confidence: primaryPurpose?.confidence ?? null,
       purpose_candidates: purposeCandidates as unknown as any,
-      review_status,
-      // Legacy fields kept in sync (hidden from UI but preserved for compatibility)
+      // Legacy columns kept in sync but no longer read by UI.
       document_type: primaryDoc?.label ?? null,
       document_type_confidence: primaryDoc?.confidence ?? null,
       purpose: primaryPurpose?.label ?? null,
@@ -306,32 +297,91 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       ai_reasoning: `${identified.reasoning}\n\nRelationship: ${matched.reasoning}`,
     } as any).eq("id", ev.id);
 
-    // If the user uploaded from a workflow step, force-link the hinted
-    // obligation even when the AI wasn't confident enough to suggest it.
-    const finalLinkedIds = new Set(linkedIds);
-    if (
+    // --- Stage 5: assignment updates ---------------------------------------
+    // Rules:
+    //  - Workflow uploads with a hint: always own the hinted obligation's
+    //    assignment (create or replace the pointer + AI fields).
+    //  - Library / AI-matched obligations: only CREATE assignments where the
+    //    obligation has no assignment yet. Never silently replace another
+    //    document a human already put on that obligation.
+    //  - AI never sets status = verified.
+    const hintOb =
       data.upload_context === "workflow" &&
       data.hint_obligation_id &&
       validIds.has(data.hint_obligation_id)
-    ) {
-      finalLinkedIds.add(data.hint_obligation_id);
-    }
-    const linkedArray = Array.from(finalLinkedIds);
+        ? data.hint_obligation_id
+        : null;
 
-    if (linkedArray.length > 0) {
-      const rows = linkedArray.map((obligation_id) => ({
-        org_id: ev.org_id,
-        evidence_id: ev.id,
-        obligation_id,
-        relevance: primaryDoc?.confidence ?? 0,
-        ai_reasoning:
-          obligation_id === data.hint_obligation_id && !linkedIds.includes(obligation_id)
-            ? `Linked by user from workflow step. ${matched.reasoning}`
-            : matched.reasoning,
-      }));
-      await supabase.from("evidence_links").upsert(rows, {
-        onConflict: "evidence_id,obligation_id",
-      });
+    const candidateObs = new Set<string>(linkedIds);
+    if (hintOb) candidateObs.add(hintOb);
+    const candidateArr = Array.from(candidateObs);
+
+    // Which of these obligations already have an assignment?
+    const { data: existingLinks } = candidateArr.length
+      ? await supabase
+          .from("evidence_links")
+          .select("id, obligation_id, evidence_id")
+          .in("obligation_id", candidateArr)
+      : { data: [] as Array<{ id: string; obligation_id: string; evidence_id: string }> };
+
+    const existingByOb = new Map<string, { id: string; evidence_id: string }>();
+    for (const l of existingLinks ?? []) {
+      existingByOb.set(l.obligation_id, { id: l.id, evidence_id: l.evidence_id });
+    }
+
+    const aiPatch = {
+      ai_document_type: primaryDoc?.label ?? null,
+      ai_document_type_confidence: primaryDoc?.confidence ?? null,
+      ai_purpose: primaryPurpose?.label ?? null,
+      ai_purpose_confidence: primaryPurpose?.confidence ?? null,
+      ai_summary: identified.summary,
+      ai_reasoning_full: matched.reasoning,
+      relevance: primaryDoc?.confidence ?? 0,
+      ai_reasoning: matched.reasoning,
+    };
+
+    const linkedArray: string[] = [];
+
+    for (const obId of candidateArr) {
+      const existing = existingByOb.get(obId);
+      const isHint = obId === hintOb;
+
+      if (existing) {
+        if (existing.evidence_id === ev.id) {
+          // Same evidence already assigned — refresh AI fields, keep status.
+          await supabase
+            .from("evidence_links")
+            .update(aiPatch as never)
+            .eq("id", existing.id);
+          linkedArray.push(obId);
+        } else if (isHint) {
+          // Workflow-driven replace: swap evidence + reset to needs_review.
+          await supabase
+            .from("evidence_links")
+            .update({
+              ...aiPatch,
+              evidence_id: ev.id,
+              status: "needs_review",
+              verified_by: null,
+              verified_at: null,
+              document_type: null,
+              purpose: null,
+            } as never)
+            .eq("id", existing.id);
+          linkedArray.push(obId);
+        }
+        // Else: obligation already has a different document from another
+        // upload — do NOT overwrite it silently. Skip.
+      } else {
+        const { error: insErr } = await supabase.from("evidence_links").insert({
+          org_id: ev.org_id,
+          evidence_id: ev.id,
+          obligation_id: obId,
+          status: "needs_review",
+          ...aiPatch,
+        } as never);
+        if (!insErr) linkedArray.push(obId);
+      }
     }
 
     return {
@@ -341,12 +391,12 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       primary_purpose_confidence: primaryPurpose?.confidence ?? null,
       document_type_candidates: docCandidates,
       purpose_candidates: purposeCandidates,
-      review_status,
       classification_status,
       summary: identified.summary,
       linked_obligation_ids: linkedArray,
     };
   });
+
 
 // --- assessObligation -------------------------------------------------------
 
