@@ -123,8 +123,15 @@ export function DocumentUpload({
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
       >
-        <Upload className="mr-2 h-4 w-4" />
-        {uploading ? "Working…" : label ?? "Upload document"}
+        {mode === "replace" ? (
+          <RefreshCw className="mr-2 h-4 w-4" />
+        ) : (
+          <Upload className="mr-2 h-4 w-4" />
+        )}
+        {uploading
+          ? "Working…"
+          : label ?? (mode === "replace" ? "Replace document" : "Upload document")}
+
       </Button>
     </div>
   );
