@@ -1,37 +1,33 @@
 import { createFileRoute, Link, useParams } from "@tanstack/react-router";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useServerFn } from "@tanstack/react-start";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DocumentUpload } from "@/components/document-upload";
-import { confirmEvidenceField } from "@/lib/ai.functions";
+import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
+import { DocumentReviewPanel, type ReviewEvidence } from "@/components/document-review-panel";
 import { toast } from "sonner";
-import { FileText, Sparkles, Check, Link2 } from "lucide-react";
+import { FileText, Sparkles, Link2, ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
   component: DocumentsPage,
 });
 
-type ReviewStatus = "confirmed" | "needs_review" | "unknown";
 type Candidate = { label: string; confidence: number };
-
-const REVIEW_META: Record<ReviewStatus, { label: string; tone: string }> = {
-  confirmed:    { label: "Confirmed",    tone: "bg-status-satisfied-bg text-status-satisfied" },
-  needs_review: { label: "Needs review", tone: "bg-status-partial-bg text-status-partial" },
-  unknown:      { label: "Unknown",      tone: "bg-status-unknown-bg text-status-unknown" },
-};
 
 type LinkRow = { id: string; obligation_id: string; title: string };
 
 type EvidenceRow = {
   id: string;
+  org_id: string;
   file_name: string;
+  file_path: string;
   mime_type: string | null;
   size_bytes: number | null;
   ai_summary: string | null;
+  ai_reasoning: string | null;
   primary_document_type: string | null;
   primary_document_type_confidence: number | null;
   document_type_candidates: Candidate[] | null;
@@ -58,17 +54,15 @@ const INTERNAL_TYPE_HINTS = [
 
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
-  const qc = useQueryClient();
-  const confirmField = useServerFn(confirmEvidenceField);
-  const [openReview, setOpenReview] = useState<Record<string, boolean>>({});
   const [tab, setTab] = useState<Tab>("all");
+  const [reviewing, setReviewing] = useState<ReviewEvidence | null>(null);
 
   const documents = useQuery({
     queryKey: ["documents", orgId],
     queryFn: async () => {
       const [ev, links, obs] = await Promise.all([
         supabase.from("evidence")
-          .select("id, file_name, mime_type, size_bytes, ai_summary, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, created_at")
+          .select("id, org_id, file_name, file_path, mime_type, size_bytes, ai_summary, ai_reasoning, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, created_at")
           .eq("org_id", orgId)
           .order("created_at", { ascending: false }),
         supabase.from("evidence_links").select("id, evidence_id, obligation_id").eq("org_id", orgId),
@@ -100,16 +94,6 @@ function DocumentsPage() {
     },
   });
 
-  const confirmMut = useMutation({
-    mutationFn: async (args: { evidence_id: string; field: "document_type" | "purpose"; value: string }) => {
-      await confirmField({ data: args });
-    },
-    onSuccess: () => {
-      toast.success("Saved");
-      qc.invalidateQueries({ queryKey: ["documents", orgId] });
-    },
-  });
-
   const { visible, counts } = useMemo(() => {
     const list = documents.data ?? [];
     const counts = {
@@ -120,8 +104,7 @@ function DocumentsPage() {
       unlinked:     list.filter((d) => d.links.length === 0).length,
     };
     const visible = list.filter((d) => {
-      const review = (d.review_status as ReviewStatus) ?? "unknown";
-      if (tab === "needs_review") return review !== "confirmed";
+      if (tab === "needs_review") return (d.review_status ?? "unknown") !== "confirmed";
       if (tab === "linked") return d.links.length > 0;
       if (tab === "internal") return d.isInternal;
       if (tab === "unlinked") return d.links.length === 0;
@@ -137,6 +120,34 @@ function DocumentsPage() {
     { id: "internal",     label: `Internal · ${counts.internal}` },
     { id: "unlinked",     label: `Unlinked · ${counts.unlinked}` },
   ];
+
+  const openReview = (e: EvidenceRow) => {
+    setReviewing({
+      id: e.id,
+      org_id: e.org_id,
+      file_name: e.file_name,
+      file_path: e.file_path,
+      primary_document_type: e.primary_document_type,
+      primary_document_type_confidence: e.primary_document_type_confidence,
+      document_type_candidates: e.document_type_candidates,
+      primary_purpose: e.primary_purpose,
+      primary_purpose_confidence: e.primary_purpose_confidence,
+      purpose_candidates: e.purpose_candidates,
+      review_status: e.review_status,
+      ai_summary: e.ai_summary,
+      ai_reasoning: e.ai_reasoning,
+      links: e.links.map((l) => ({ obligation_id: l.obligation_id, title: l.title })),
+    });
+  };
+
+  const openFile = async (path: string) => {
+    const { data, error } = await supabase.storage.from("evidence").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message ?? "Could not open file");
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+  };
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -180,13 +191,9 @@ function DocumentsPage() {
         {visible.length ? (
           <ul className="space-y-3">
             {visible.map((e) => {
-              const review = (e.review_status as ReviewStatus) ?? "unknown";
-              const meta = REVIEW_META[review] ?? REVIEW_META.unknown;
+              const lifecycle: DocLifecycle =
+                e.review_status === "confirmed" ? "on_file" : "needs_review";
               const docConf = Math.round(((e.primary_document_type_confidence ?? 0)) * 100);
-              const purConf = Math.round(((e.primary_purpose_confidence ?? 0)) * 100);
-              const docCandidates = (e.document_type_candidates ?? []).filter(c => c?.label);
-              const purCandidates = (e.purpose_candidates ?? []).filter(c => c?.label);
-              const isOpen = !!openReview[e.id];
 
               return (
                 <li key={e.id} className="rounded-lg border border-border bg-card p-4">
@@ -200,9 +207,7 @@ function DocumentsPage() {
                             {e.mime_type ?? "?"} · {formatBytes(e.size_bytes)} · {new Date(e.created_at).toLocaleString()}
                           </p>
                         </div>
-                        <span className={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium ${meta.tone}`}>
-                          {meta.label}
-                        </span>
+                        <DocumentStatusPill state={lifecycle} />
                       </div>
 
                       <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -239,45 +244,17 @@ function DocumentsPage() {
                       )}
 
                       <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {review !== "confirmed" && e.primary_document_type && (
-                          <Button
-                            size="sm"
-                            disabled={confirmMut.isPending}
-                            onClick={() => confirmMut.mutate({ evidence_id: e.id, field: "document_type", value: e.primary_document_type! })}
-                          >
-                            <Check className="mr-1 h-3 w-3" />
-                            Confirm as {e.primary_document_type}
+                        {lifecycle === "needs_review" ? (
+                          <Button size="sm" onClick={() => openReview(e)}>
+                            Review now
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="outline" onClick={() => openFile(e.file_path)}>
+                            <ExternalLink className="mr-1 h-3 w-3" />
+                            View
                           </Button>
                         )}
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setOpenReview((s) => ({ ...s, [e.id]: !s[e.id] }))}
-                        >
-                          {isOpen ? "Hide" : "Review"} suggestions
-                        </Button>
                       </div>
-
-                      {isOpen && (
-                        <div className="mt-3 space-y-4 rounded-md border border-border/70 bg-muted/30 p-3">
-                          <CandidatePicker
-                            title="Document type"
-                            current={e.primary_document_type}
-                            currentConfidence={docConf}
-                            candidates={docCandidates}
-                            disabled={confirmMut.isPending}
-                            onPick={(value) => confirmMut.mutate({ evidence_id: e.id, field: "document_type", value })}
-                          />
-                          <CandidatePicker
-                            title="Purpose"
-                            current={e.primary_purpose}
-                            currentConfidence={purConf}
-                            candidates={purCandidates}
-                            disabled={confirmMut.isPending}
-                            onPick={(value) => confirmMut.mutate({ evidence_id: e.id, field: "purpose", value })}
-                          />
-                        </div>
-                      )}
                     </div>
                   </div>
                 </li>
@@ -290,6 +267,12 @@ function DocumentsPage() {
           </p>
         )}
       </div>
+
+      <DocumentReviewPanel
+        open={!!reviewing}
+        onOpenChange={(v) => !v && setReviewing(null)}
+        evidence={reviewing}
+      />
     </div>
   );
 }
@@ -299,59 +282,6 @@ function Field({ label, value }: { label: string; value: string | null | undefin
     <div>
       <p className="text-xs uppercase tracking-wide text-muted-foreground">{label}</p>
       <p className="mt-0.5 text-sm font-medium">{value?.trim() ? value : "—"}</p>
-    </div>
-  );
-}
-
-function CandidatePicker({
-  title,
-  current,
-  currentConfidence,
-  candidates,
-  disabled,
-  onPick,
-}: {
-  title: string;
-  current: string | null;
-  currentConfidence: number;
-  candidates: Candidate[];
-  disabled: boolean;
-  onPick: (value: string) => void;
-}) {
-  const shown: Array<Candidate & { isCurrent?: boolean }> = [];
-  if (current) shown.push({ label: current, confidence: currentConfidence / 100, isCurrent: true });
-  for (const c of candidates) {
-    if (!current || c.label !== current) shown.push(c);
-  }
-  return (
-    <div>
-      <p className="text-xs font-medium text-foreground">{title}</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">Pick the correct value or set a custom one.</p>
-      <div className="mt-2 flex flex-wrap gap-2">
-        {shown.slice(0, 4).map((c) => (
-          <Button
-            key={`${title}-${c.label}`}
-            size="sm"
-            variant={c.isCurrent ? "default" : "outline"}
-            disabled={disabled}
-            onClick={() => onPick(c.label)}
-          >
-            {c.isCurrent && <Check className="mr-1 h-3 w-3" />}
-            {c.label} · {Math.round((c.confidence ?? 0) * 100)}%
-          </Button>
-        ))}
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={disabled}
-          onClick={() => {
-            const t = window.prompt(`Set ${title.toLowerCase()}:`, current ?? "");
-            if (t && t.trim()) onPick(t.trim());
-          }}
-        >
-          Set custom…
-        </Button>
-      </div>
     </div>
   );
 }
