@@ -2,7 +2,8 @@ import { useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { classifyEvidence, assessObligation, generateTasks } from "@/lib/ai.functions";
+import { classifyEvidence } from "@/lib/ai.functions";
+import { replaceAssignmentEvidence } from "@/lib/document-assignment.functions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Upload, RefreshCw } from "lucide-react";
@@ -10,37 +11,34 @@ import { cn } from "@/lib/utils";
 
 type Props = {
   orgId: string;
-  /** When set, the upload originates from a workflow requirement and auto-links. */
   hintObligationId?: string;
   context?: "workflow" | "library";
-  /** "upload" = default; "replace" = swap the existing on-file document. */
   mode?: "upload" | "replace";
+  /** Required in replace mode — the assignment whose evidence_id we swap. */
+  assignmentId?: string;
+  /** Called after everything (upload + classify) succeeds. Use to open the review panel. */
+  onAfterUpload?: (evidenceId: string) => void;
   size?: "sm" | "default";
   variant?: "default" | "outline" | "ghost" | "secondary";
   label?: string;
   className?: string;
 };
 
-
-/**
- * Shared upload button. Handles storage upload, evidence row insert,
- * AI classification (with optional obligation hint), and cache invalidation.
- */
 export function DocumentUpload({
   orgId,
   hintObligationId,
   context = "library",
   mode = "upload",
+  assignmentId,
+  onAfterUpload,
   size = "default",
   variant = "outline",
   label,
   className,
 }: Props) {
-
   const qc = useQueryClient();
   const classify = useServerFn(classifyEvidence);
-  const assess = useServerFn(assessObligation);
-  const regen = useServerFn(generateTasks);
+  const replaceEv = useServerFn(replaceAssignmentEvidence);
   const inputRef = useRef<HTMLInputElement>(null);
   const [uploading, setUploading] = useState(false);
 
@@ -70,8 +68,16 @@ export function DocumentUpload({
         .single();
       if (insErr) throw new Error(insErr.message);
 
+      // Replace flow: swap evidence pointer on the existing assignment BEFORE
+      // classify runs, so classify's AI update lands on the same assignment row.
+      if (mode === "replace" && assignmentId) {
+        await replaceEv({
+          data: { assignment_id: assignmentId, new_evidence_id: row.id },
+        });
+      }
+
       toast.info("Understanding document…");
-      const result = await classify({
+      await classify({
         data: {
           evidence_id: row.id,
           hint_obligation_id: hintObligationId ?? null,
@@ -79,22 +85,12 @@ export function DocumentUpload({
         },
       });
 
-      const identified = result.primary_document_type ?? "Unknown document";
-      if (context === "workflow" && hintObligationId) {
-        toast.success(`Linked as ${identified}`);
-      } else {
-        toast.success(`Identified: ${identified}`);
-      }
+      toast.success(
+        mode === "replace" ? "Document replaced — review the new one" : "Document uploaded"
+      );
 
-      if (result.linked_obligation_ids.length > 0) {
-        await Promise.all(
-          result.linked_obligation_ids.map((obId) =>
-            assess({ data: { obligation_id: obId } })
-          )
-        );
-        await regen({ data: { org_id: orgId } });
-      }
       await qc.invalidateQueries();
+      onAfterUpload?.(row.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     } finally {
@@ -131,7 +127,6 @@ export function DocumentUpload({
         {uploading
           ? "Working…"
           : label ?? (mode === "replace" ? "Replace document" : "Upload document")}
-
       </Button>
     </div>
   );
