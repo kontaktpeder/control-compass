@@ -2,16 +2,15 @@ import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
 import { DocumentUpload } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { toast } from "sonner";
-import { FileText, ChevronRight, ExternalLink } from "lucide-react";
+import { FileText, ChevronRight, ExternalLink, ExternalLink as LinkIcon } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/workflows")({
-  component: WorkflowsPage,
+  component: RegisterCompanyPage,
 });
 
 type EvidenceLite = {
@@ -26,7 +25,7 @@ type Assignment = {
   id: string;
   obligation_id: string;
   evidence_id: string;
-  status: "needs_review" | "verified";
+  status: "needs_review" | "verified" | "rejected";
   document_type: string | null;
   purpose: string | null;
   ai_document_type: string | null;
@@ -42,10 +41,10 @@ type ObligationRow = {
   id: string;
   title: string;
   why: string | null;
-  playbook_step_id: string | null;
   evidence_requirements: string[] | null;
   responsible: string | null;
   is_required: boolean | null;
+  source: { authority: string | null; reference: string | null; url: string | null } | null;
 };
 
 function toReview(a: Assignment, ob: { id: string; title: string }): ReviewAssignment | null {
@@ -54,7 +53,7 @@ function toReview(a: Assignment, ob: { id: string; title: string }): ReviewAssig
     assignment_id: a.id,
     obligation_id: ob.id,
     obligation_title: ob.title,
-    status: a.status,
+    status: a.status === "rejected" ? "needs_review" : a.status,
     evidence_id: a.evidence.id,
     file_name: a.evidence.file_name,
     file_path: a.evidence.file_path,
@@ -76,17 +75,22 @@ function lifecycleFor(a: Assignment | undefined): DocLifecycle {
   return a.status === "verified" ? "on_file" : "needs_review";
 }
 
-function WorkflowsPage() {
+function RegisterCompanyPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/workflows" });
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
 
   const data = useQuery({
-    queryKey: ["workflows", orgId],
+    queryKey: ["register-company", orgId],
     queryFn: async () => {
-      const [pb, steps, obs, links] = await Promise.all([
-        supabase.from("playbooks").select("id, name, slug").eq("org_id", orgId).eq("slug", "incorporate_company").maybeSingle(),
-        supabase.from("playbook_steps").select("id, title, description, order_index").eq("org_id", orgId).order("order_index"),
-        supabase.from("obligations").select("id, title, why, playbook_step_id, evidence_requirements, responsible, is_required").eq("org_id", orgId),
+      const [obs, links] = await Promise.all([
+        supabase
+          .from("obligations")
+          .select(
+            "id, title, why, evidence_requirements, responsible, is_required, source:source_id(authority, reference, url)"
+          )
+          .eq("org_id", orgId)
+          .order("is_required", { ascending: false })
+          .order("title"),
         supabase
           .from("evidence_links")
           .select(
@@ -99,75 +103,53 @@ function WorkflowsPage() {
       for (const l of (links.data ?? []) as unknown as Assignment[]) {
         if (l.obligation_id) byOb.set(l.obligation_id, l);
       }
-
-      return {
-        pb: pb.data,
-        steps: steps.data ?? [],
-        obs: (obs.data ?? []) as ObligationRow[],
-        byOb,
-      };
+      return { obs: (obs.data ?? []) as unknown as ObligationRow[], byOb };
     },
   });
 
+  const obs = data.data?.obs ?? [];
+  const byOb = data.data?.byOb ?? new Map<string, Assignment>();
+  const required = obs.filter((o) => o.is_required !== false);
+  const company = obs.filter((o) => o.is_required === false);
+  const onFile = required.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
+  const needsReview = obs.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
+
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <p className="eyebrow">Workflow</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{data.data?.pb?.name ?? "Incorporate a Company"}</h1>
+      <p className="eyebrow">Workspace</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Register Company</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        A guided sequence. Upload a document, review the AI's suggestion, and confirm. A requirement
-        turns green once you've verified the document is what the AI thinks it is.
+        Every document folder your company needs to be in control. Upload a document, review the AI's
+        suggestion, and confirm. A folder turns green once you've verified it.
       </p>
 
-      <div className="mt-10 space-y-6">
-        {(data.data?.steps ?? []).map((step) => {
-          const stepObs = (data.data?.obs ?? []).filter((o) => o.playbook_step_id === step.id);
-          const required = stepObs.filter((o) => o.is_required !== false);
-          const company = stepObs.filter((o) => o.is_required === false);
-          const byOb = data.data!.byOb;
-          const done = required.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
-
-          return (
-            <Card key={step.id}>
-              <CardHeader>
-                <div className="flex items-start justify-between gap-4">
-                  <div>
-                    <p className="eyebrow">Step {step.order_index}</p>
-                    <CardTitle className="mt-1 text-lg">{step.title}</CardTitle>
-                    <p className="mt-2 text-sm text-muted-foreground">{step.description}</p>
-                  </div>
-                  <span className="whitespace-nowrap text-sm text-muted-foreground">
-                    {done} / {required.length} on file
-                  </span>
-                </div>
-              </CardHeader>
-              <CardContent className="pt-0 space-y-6">
-                {required.length > 0 && (
-                  <ObligationSection
-                    orgId={orgId}
-                    title="Required documents"
-                    subtitle="Legally required for this step."
-                    obligations={required}
-                    byOb={byOb}
-                    onReview={setReviewing}
-                    stepTitle={step.title}
-                  />
-                )}
-                {company.length > 0 && (
-                  <ObligationSection
-                    orgId={orgId}
-                    title="Company documents"
-                    subtitle="Recommended internal agreements. Not required by law, but good practice."
-                    obligations={company}
-                    byOb={byOb}
-                    onReview={setReviewing}
-                    stepTitle={step.title}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          );
-        })}
+      <div className="mt-6 flex flex-wrap gap-6 text-sm">
+        <span className="text-muted-foreground">
+          <span className="font-medium text-foreground">{onFile}</span> / {required.length} required on file
+        </span>
+        {needsReview > 0 && (
+          <span className="text-status-partial">
+            <span className="font-medium">{needsReview}</span> awaiting your review
+          </span>
+        )}
       </div>
+
+      <Section
+        title="Required documents"
+        subtitle="Legally required to incorporate and run the company."
+        orgId={orgId}
+        obligations={required}
+        byOb={byOb}
+        onReview={setReviewing}
+      />
+      <Section
+        title="Company documents"
+        subtitle="Recommended internal agreements. Not required by law, but good practice."
+        orgId={orgId}
+        obligations={company}
+        byOb={byOb}
+        onReview={setReviewing}
+      />
 
       <DocumentReviewPanel
         open={!!reviewing}
@@ -180,42 +162,39 @@ function WorkflowsPage() {
   );
 }
 
-function ObligationSection({
-  orgId,
+function Section({
   title,
   subtitle,
+  orgId,
   obligations,
   byOb,
   onReview,
-  stepTitle,
 }: {
-  orgId: string;
   title: string;
   subtitle: string;
+  orgId: string;
   obligations: ObligationRow[];
   byOb: Map<string, Assignment>;
   onReview: (a: ReviewAssignment) => void;
-  stepTitle: string;
 }) {
+  if (obligations.length === 0) return null;
   return (
-    <div>
-      <div className="mb-2">
-        <h3 className="text-sm font-semibold">{title}</h3>
-        <p className="text-xs text-muted-foreground">{subtitle}</p>
+    <section className="mt-10">
+      <div className="mb-3">
+        <h2 className="text-lg font-semibold">{title}</h2>
+        <p className="text-sm text-muted-foreground">{subtitle}</p>
       </div>
-      <ul className="divide-y divide-border rounded-md border border-border/70">
+      <ul className="divide-y divide-border rounded-lg border border-border bg-card">
         {obligations.map((o) => {
           const assignment = byOb.get(o.id);
           const lifecycle = lifecycleFor(assignment);
           const ev = assignment?.evidence ?? null;
           const displayType = assignment?.document_type ?? assignment?.ai_document_type ?? null;
-
           const openReview = () => {
             if (!assignment) return;
             const r = toReview(assignment, { id: o.id, title: o.title });
             if (r) onReview(r);
           };
-
           return (
             <li key={o.id} className="p-4">
               <div className="flex items-start justify-between gap-4">
@@ -224,28 +203,37 @@ function ObligationSection({
                     <p className="text-sm font-medium">{o.title}</p>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (lifecycle === "needs_review") openReview();
-                      }}
+                      onClick={() => lifecycle === "needs_review" && openReview()}
                       className={lifecycle === "needs_review" ? "cursor-pointer" : "cursor-default"}
                     >
                       <DocumentStatusPill state={lifecycle} />
                     </button>
                   </div>
                   {o.why && <p className="mt-1 text-xs text-muted-foreground">{o.why}</p>}
-                  {o.responsible && (
-                    <p className="mt-1 text-xs text-muted-foreground">
-                      <span className="font-medium text-foreground/70">Responsible:</span> {o.responsible}
-                    </p>
-                  )}
+                  <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
+                    {o.responsible && (
+                      <span>
+                        <span className="font-medium text-foreground/70">Responsible:</span> {o.responsible}
+                      </span>
+                    )}
+                    {o.source?.url && (
+                      <a
+                        href={o.source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
+                      >
+                        <LinkIcon className="h-3 w-3" />
+                        {o.source.authority ?? "Source"}
+                      </a>
+                    )}
+                  </div>
 
                   {ev ? (
                     <div className="mt-3 flex items-center gap-2 text-xs text-muted-foreground">
                       <FileText className="h-3.5 w-3.5 text-primary" />
                       <span className="truncate">{ev.file_name}</span>
-                      {displayType && (
-                        <span className="text-muted-foreground/70">· {displayType}</span>
-                      )}
+                      {displayType && <span className="text-muted-foreground/70">· {displayType}</span>}
                     </div>
                   ) : (
                     <p className="mt-3 text-xs italic text-muted-foreground">No document yet.</p>
@@ -303,7 +291,6 @@ function ObligationSection({
                     to="/o/$orgId/obligations/$id"
                     params={{ orgId, id: o.id }}
                     className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
-                    title={`Requirement of ${stepTitle}`}
                   >
                     Details <ChevronRight className="h-3 w-3" />
                   </Link>
@@ -313,6 +300,6 @@ function ObligationSection({
           );
         })}
       </ul>
-    </div>
+    </section>
   );
 }
