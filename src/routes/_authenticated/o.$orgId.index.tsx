@@ -91,13 +91,18 @@ function Dashboard() {
         </Button>
       </header>
 
-      <section className="mb-10 grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Metric label="Known" value={total} />
+      <section className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Metric label="Required" value={total} />
         <Metric label="Satisfied" value={satisfied} tone="satisfied" />
         <Metric label="Partial" value={partial} tone="partial" />
         <Metric label="Missing" value={missing} tone="missing" />
         <Metric label="Unknown" value={unknown} tone="unknown" />
       </section>
+      {recommended.length > 0 && (
+        <p className="mb-10 text-xs text-muted-foreground">
+          Plus <span className="font-medium text-foreground">{recommendedOnFile} / {recommended.length}</span> recommended company documents on file. These don't affect compliance.
+        </p>
+      )}
 
       <section className="mb-10">
         <Card>
