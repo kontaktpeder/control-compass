@@ -275,15 +275,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       classification_status = "needs_review";
     }
 
-    // Review status: needs_review unless AI is very confident on both dimensions.
-    const highConfidence =
-      (primaryDoc?.confidence ?? 0) >= 0.85 &&
-      (primaryPurpose?.confidence ?? 0) >= 0.7;
-    const review_status: "confirmed" | "needs_review" | "unknown" = !primaryDoc
-      ? "unknown"
-      : highConfidence
-        ? "confirmed"
-        : "needs_review";
+
+
 
     // --- Stage 4: persist AI metadata on evidence (candidates only, no product status) ---
     await supabase.from("evidence").update({
