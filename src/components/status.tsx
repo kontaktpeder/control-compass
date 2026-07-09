@@ -39,3 +39,20 @@ export function ConfidenceBadge({ value }: { value: number | null | undefined })
     </span>
   );
 }
+
+export type DocLifecycle = "no_document" | "needs_review" | "on_file";
+
+export function DocumentStatusPill({ state, className }: { state: DocLifecycle; className?: string }) {
+  const meta: Record<DocLifecycle, { label: string; tone: string; dot: string }> = {
+    no_document:  { label: "No document",  tone: "bg-status-unknown-bg text-status-unknown",     dot: "bg-status-unknown" },
+    needs_review: { label: "Needs review", tone: "bg-status-partial-bg text-status-partial",     dot: "bg-status-partial" },
+    on_file:      { label: "On file",      tone: "bg-status-satisfied-bg text-status-satisfied", dot: "bg-status-satisfied" },
+  };
+  const m = meta[state];
+  return (
+    <span className={cn("inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium", m.tone, className)}>
+      <span className={cn("h-1.5 w-1.5 rounded-full", m.dot)} />
+      {m.label}
+    </span>
+  );
+}

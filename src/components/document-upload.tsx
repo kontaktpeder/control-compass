@@ -5,7 +5,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { classifyEvidence, assessObligation, generateTasks } from "@/lib/ai.functions";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Upload } from "lucide-react";
+import { Upload, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -13,11 +13,14 @@ type Props = {
   /** When set, the upload originates from a workflow requirement and auto-links. */
   hintObligationId?: string;
   context?: "workflow" | "library";
+  /** "upload" = default; "replace" = swap the existing on-file document. */
+  mode?: "upload" | "replace";
   size?: "sm" | "default";
   variant?: "default" | "outline" | "ghost" | "secondary";
   label?: string;
   className?: string;
 };
+
 
 /**
  * Shared upload button. Handles storage upload, evidence row insert,
@@ -27,11 +30,13 @@ export function DocumentUpload({
   orgId,
   hintObligationId,
   context = "library",
+  mode = "upload",
   size = "default",
   variant = "outline",
   label,
   className,
 }: Props) {
+
   const qc = useQueryClient();
   const classify = useServerFn(classifyEvidence);
   const assess = useServerFn(assessObligation);
@@ -118,8 +123,15 @@ export function DocumentUpload({
         disabled={uploading}
         onClick={() => inputRef.current?.click()}
       >
-        <Upload className="mr-2 h-4 w-4" />
-        {uploading ? "Working…" : label ?? "Upload document"}
+        {mode === "replace" ? (
+          <RefreshCw className="mr-2 h-4 w-4" />
+        ) : (
+          <Upload className="mr-2 h-4 w-4" />
+        )}
+        {uploading
+          ? "Working…"
+          : label ?? (mode === "replace" ? "Replace document" : "Upload document")}
+
       </Button>
     </div>
   );
