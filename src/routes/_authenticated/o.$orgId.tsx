@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, LayoutDashboard, ListChecks, FileText, BookOpen, CheckSquare, Building2, LogOut } from "lucide-react";
+import { ShieldCheck, LayoutDashboard, FileText, Workflow, CheckSquare, Building2, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -28,9 +28,8 @@ function OrgShell() {
 
   const navItems: Array<{ to: string; label: string; icon: typeof LayoutDashboard; end?: boolean }> = [
     { to: "/o/$orgId", label: "Dashboard", icon: LayoutDashboard, end: true },
-    { to: "/o/$orgId/playbook", label: "Playbook", icon: BookOpen },
-    { to: "/o/$orgId/obligations", label: "Obligations", icon: ListChecks },
-    { to: "/o/$orgId/evidence", label: "Evidence", icon: FileText },
+    { to: "/o/$orgId/workflows", label: "Workflows", icon: Workflow },
+    { to: "/o/$orgId/evidence", label: "Documents", icon: FileText },
     { to: "/o/$orgId/tasks", label: "Tasks", icon: CheckSquare },
   ];
 

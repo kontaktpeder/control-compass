@@ -33,7 +33,15 @@ type ClassificationStatus = typeof CLASSIFICATION_STATUSES[number];
 // --- classifyEvidence -------------------------------------------------------
 export const classifyEvidence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator((input: unknown) => z.object({ evidence_id: z.string().uuid() }).parse(input))
+  .inputValidator((input: unknown) =>
+    z.object({
+      evidence_id: z.string().uuid(),
+      // Optional hint: which obligation the user was working on when uploading.
+      hint_obligation_id: z.string().uuid().nullish(),
+      // Where the upload originated. Workflow uploads always link to the hint.
+      upload_context: z.enum(["workflow", "library"]).optional().default("library"),
+    }).parse(input)
+  )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
 
@@ -294,13 +302,28 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       ai_reasoning: `${identified.reasoning}\n\nRelationship: ${matched.reasoning}`,
     } as any).eq("id", ev.id);
 
-    if (linkedIds.length > 0) {
-      const rows = linkedIds.map((obligation_id) => ({
+    // If the user uploaded from a workflow step, force-link the hinted
+    // obligation even when the AI wasn't confident enough to suggest it.
+    const finalLinkedIds = new Set(linkedIds);
+    if (
+      data.upload_context === "workflow" &&
+      data.hint_obligation_id &&
+      validIds.has(data.hint_obligation_id)
+    ) {
+      finalLinkedIds.add(data.hint_obligation_id);
+    }
+    const linkedArray = Array.from(finalLinkedIds);
+
+    if (linkedArray.length > 0) {
+      const rows = linkedArray.map((obligation_id) => ({
         org_id: ev.org_id,
         evidence_id: ev.id,
         obligation_id,
         relevance: primaryDoc?.confidence ?? 0,
-        ai_reasoning: matched.reasoning,
+        ai_reasoning:
+          obligation_id === data.hint_obligation_id && !linkedIds.includes(obligation_id)
+            ? `Linked by user from workflow step. ${matched.reasoning}`
+            : matched.reasoning,
       }));
       await supabase.from("evidence_links").upsert(rows, {
         onConflict: "evidence_id,obligation_id",
@@ -317,7 +340,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       review_status,
       classification_status,
       summary: identified.summary,
-      linked_obligation_ids: linkedIds,
+      linked_obligation_ids: linkedArray,
     };
   });
 

@@ -1,17 +1,18 @@
-import { createFileRoute, useParams } from "@tanstack/react-router";
+import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
-import { useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { classifyEvidence, generateTasks, confirmEvidenceField } from "@/lib/ai.functions";
+import { DocumentUpload } from "@/components/document-upload";
+import { confirmEvidenceField } from "@/lib/ai.functions";
 import { toast } from "sonner";
-import { Upload, FileText, Sparkles, Check } from "lucide-react";
+import { FileText, Sparkles, Check, Link2 } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
-  component: EvidencePage,
+  component: DocumentsPage,
 });
 
 type ReviewStatus = "confirmed" | "needs_review" | "unknown";
@@ -22,6 +23,8 @@ const REVIEW_META: Record<ReviewStatus, { label: string; tone: string }> = {
   needs_review: { label: "Needs review", tone: "bg-status-partial-bg text-status-partial" },
   unknown:      { label: "Unknown",      tone: "bg-status-unknown-bg text-status-unknown" },
 };
+
+type LinkRow = { id: string; obligation_id: string; title: string };
 
 type EvidenceRow = {
   id: string;
@@ -37,28 +40,43 @@ type EvidenceRow = {
   purpose_candidates: Candidate[] | null;
   review_status: string | null;
   created_at: string;
+  links: LinkRow[];
 };
 
-function EvidencePage() {
+type Tab = "needs_review" | "linked" | "unlinked" | "all";
+
+function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
   const qc = useQueryClient();
-  const classify = useServerFn(classifyEvidence);
-  const regen = useServerFn(generateTasks);
   const confirmField = useServerFn(confirmEvidenceField);
-  const fileInput = useRef<HTMLInputElement>(null);
-  const [uploading, setUploading] = useState(false);
   const [openReview, setOpenReview] = useState<Record<string, boolean>>({});
+  const [tab, setTab] = useState<Tab>("needs_review");
 
-  const evidence = useQuery({
-    queryKey: ["evidence", orgId],
+  const documents = useQuery({
+    queryKey: ["documents", orgId],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from("evidence")
-        .select("id, file_name, mime_type, size_bytes, ai_summary, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, created_at")
-        .eq("org_id", orgId)
-        .order("created_at", { ascending: false });
-      if (error) throw new Error(error.message);
-      return (data ?? []) as unknown as EvidenceRow[];
+      const [ev, links, obs] = await Promise.all([
+        supabase.from("evidence")
+          .select("id, file_name, mime_type, size_bytes, ai_summary, primary_document_type, primary_document_type_confidence, document_type_candidates, primary_purpose, primary_purpose_confidence, purpose_candidates, review_status, created_at")
+          .eq("org_id", orgId)
+          .order("created_at", { ascending: false }),
+        supabase.from("evidence_links").select("id, evidence_id, obligation_id").eq("org_id", orgId),
+        supabase.from("obligations").select("id, title").eq("org_id", orgId),
+      ]);
+      if (ev.error) throw new Error(ev.error.message);
+
+      const obTitle = new Map<string, string>();
+      for (const o of obs.data ?? []) obTitle.set(o.id, o.title);
+      const linksByEv = new Map<string, LinkRow[]>();
+      for (const l of links.data ?? []) {
+        const arr = linksByEv.get(l.evidence_id) ?? [];
+        arr.push({ id: l.id, obligation_id: l.obligation_id, title: obTitle.get(l.obligation_id) ?? "Unknown" });
+        linksByEv.set(l.evidence_id, arr);
+      }
+      return (ev.data ?? []).map((row) => ({
+        ...row,
+        links: linksByEv.get(row.id) ?? [],
+      })) as unknown as EvidenceRow[];
     },
   });
 
@@ -68,94 +86,77 @@ function EvidencePage() {
     },
     onSuccess: () => {
       toast.success("Saved");
-      qc.invalidateQueries({ queryKey: ["evidence", orgId] });
+      qc.invalidateQueries({ queryKey: ["documents", orgId] });
     },
   });
 
-  const handleUpload = async (file: File) => {
-    setUploading(true);
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      if (!userData.user) throw new Error("Not signed in");
+  const { visible, counts } = useMemo(() => {
+    const list = documents.data ?? [];
+    const counts = {
+      needs_review: list.filter((d) => (d.review_status ?? "unknown") !== "confirmed").length,
+      linked:       list.filter((d) => d.links.length > 0).length,
+      unlinked:     list.filter((d) => d.links.length === 0).length,
+      all:          list.length,
+    };
+    const visible = list.filter((d) => {
+      const review = (d.review_status as ReviewStatus) ?? "unknown";
+      if (tab === "needs_review") return review !== "confirmed";
+      if (tab === "linked") return d.links.length > 0;
+      if (tab === "unlinked") return d.links.length === 0;
+      return true;
+    });
+    return { visible, counts };
+  }, [documents.data, tab]);
 
-      const path = `${orgId}/${crypto.randomUUID()}-${file.name}`;
-      const up = await supabase.storage.from("evidence").upload(path, file, {
-        contentType: file.type || "application/octet-stream",
-      });
-      if (up.error) throw new Error(up.error.message);
-
-      const { data: row, error: insErr } = await supabase
-        .from("evidence")
-        .insert({
-          org_id: orgId,
-          uploaded_by: userData.user.id,
-          file_path: path,
-          file_name: file.name,
-          mime_type: file.type || null,
-          size_bytes: file.size,
-        })
-        .select()
-        .single();
-      if (insErr) throw new Error(insErr.message);
-
-      toast.info("Understanding document…");
-      const result = await classify({ data: { evidence_id: row.id } });
-      const label = result.primary_document_type ?? "Unknown document";
-      toast.success(`Identified: ${label}`);
-
-      if (result.linked_obligation_ids.length > 0) {
-        const { assessObligation } = await import("@/lib/ai.functions");
-        await Promise.all(
-          result.linked_obligation_ids.map((obId) => assessObligation({ data: { obligation_id: obId } }))
-        );
-        await regen({ data: { org_id: orgId } });
-      }
-      await qc.invalidateQueries();
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
-    } finally {
-      setUploading(false);
-    }
-  };
+  const tabs: Array<{ id: Tab; label: string }> = [
+    { id: "needs_review", label: `Needs review · ${counts.needs_review}` },
+    { id: "linked",       label: `Linked · ${counts.linked}` },
+    { id: "unlinked",     label: `Unlinked · ${counts.unlinked}` },
+    { id: "all",          label: `All · ${counts.all}` },
+  ];
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <p className="eyebrow">Evidence</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">What proves it's done</h1>
+      <p className="eyebrow">Documents</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">The library</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        Upload the real documents — Articles of Association, bank confirmations, board minutes, agreements — and Control Core will identify them, understand their purpose, and connect them to the obligations they support.
+        Every document Control Core has understood. Upload from a workflow step to link automatically,
+        or drop something here for the AI to identify and file.
       </p>
 
       <Card className="mt-8 border-dashed">
         <CardHeader>
-          <CardTitle className="text-base">Upload evidence</CardTitle>
-          <CardDescription>PDF or image. Max ~4 MB is analysed by AI in full.</CardDescription>
+          <CardTitle className="text-base">Upload to the library</CardTitle>
+          <CardDescription>
+            PDF or image. For anything that belongs to a specific step, upload from the Workflow view instead.
+          </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
-            <Input
-              ref={fileInput}
-              type="file"
-              accept="application/pdf,image/*"
-              onChange={(e) => {
-                const f = e.target.files?.[0];
-                if (f) handleUpload(f);
-                if (fileInput.current) fileInput.current.value = "";
-              }}
-              disabled={uploading}
-            />
-            <Button variant="outline" disabled={uploading}>
-              <Upload className="mr-2 h-4 w-4" /> {uploading ? "Working…" : "Upload"}
-            </Button>
-          </div>
+          <DocumentUpload orgId={orgId} context="library" label="Upload document" />
         </CardContent>
       </Card>
 
       <div className="mt-10">
-        <h2 className="mb-3 text-lg font-semibold">Uploaded documents</h2>
-        {evidence.data?.length ? (
+        <div className="mb-4 flex flex-wrap gap-1 border-b border-border">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              onClick={() => setTab(t.id)}
+              className={cn(
+                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition",
+                tab === t.id
+                  ? "border-primary text-foreground"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+
+        {visible.length ? (
           <ul className="space-y-3">
-            {evidence.data.map((e) => {
+            {visible.map((e) => {
               const review = (e.review_status as ReviewStatus) ?? "unknown";
               const meta = REVIEW_META[review] ?? REVIEW_META.unknown;
               const docConf = Math.round(((e.primary_document_type_confidence ?? 0)) * 100);
@@ -169,7 +170,6 @@ function EvidencePage() {
                   <div className="flex items-start gap-3">
                     <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0 flex-1">
-                      {/* Header: filename + status */}
                       <div className="flex items-start justify-between gap-3">
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{e.file_name}</p>
@@ -182,7 +182,6 @@ function EvidencePage() {
                         </span>
                       </div>
 
-                      {/* Clean primary fields */}
                       <div className="mt-3 grid gap-3 sm:grid-cols-3">
                         <Field label="Document type" value={e.primary_document_type} />
                         <Field label="Purpose" value={e.primary_purpose} />
@@ -199,7 +198,23 @@ function EvidencePage() {
                         </p>
                       )}
 
-                      {/* Review action */}
+                      {e.links.length > 0 && (
+                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                          <Link2 className="h-3 w-3 text-primary" />
+                          <span className="text-muted-foreground">Linked to:</span>
+                          {e.links.map((l) => (
+                            <Link
+                              key={l.id}
+                              to="/o/$orgId/obligations/$id"
+                              params={{ orgId, id: l.obligation_id }}
+                              className="rounded-md bg-muted px-2 py-0.5 hover:bg-muted/70 hover:underline"
+                            >
+                              {l.title}
+                            </Link>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {review !== "confirmed" && e.primary_document_type && (
                           <Button
@@ -220,7 +235,6 @@ function EvidencePage() {
                         </Button>
                       </div>
 
-                      {/* Review panel — only place candidates are ever shown */}
                       {isOpen && (
                         <div className="mt-3 space-y-4 rounded-md border border-border/70 bg-muted/30 p-3">
                           <CandidatePicker
@@ -249,7 +263,7 @@ function EvidencePage() {
           </ul>
         ) : (
           <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            No evidence uploaded yet.
+            Nothing here.
           </p>
         )}
       </div>
@@ -281,7 +295,6 @@ function CandidatePicker({
   disabled: boolean;
   onPick: (value: string) => void;
 }) {
-  // Show current on top, then any other candidates
   const shown: Array<Candidate & { isCurrent?: boolean }> = [];
   if (current) shown.push({ label: current, confidence: currentConfidence / 100, isCurrent: true });
   for (const c of candidates) {
