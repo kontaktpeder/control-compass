@@ -17,6 +17,7 @@ type ObligationRow = {
   id: string;
   title: string;
   playbook_step_id: string | null;
+  is_required: boolean;
   latest?: { status: Status; confidence: number | null } | null;
 };
 
@@ -29,7 +30,7 @@ function Dashboard() {
     queryKey: ["dashboard", orgId],
     queryFn: async () => {
       const [obs, assess, tasks, steps] = await Promise.all([
-        supabase.from("obligations").select("id, title, playbook_step_id").eq("org_id", orgId),
+        supabase.from("obligations").select("id, title, playbook_step_id, is_required").eq("org_id", orgId),
         supabase.from("assessments").select("obligation_id, status, confidence, created_at").eq("org_id", orgId).order("created_at", { ascending: false }),
         supabase.from("tasks").select("id, title, status, obligation_id").eq("org_id", orgId).eq("status", "open"),
         supabase.from("playbook_steps").select("id, title, order_index").eq("org_id", orgId).order("order_index"),
@@ -37,7 +38,11 @@ function Dashboard() {
       if (obs.error) throw new Error(obs.error.message);
       const latestByOb = new Map<string, { status: Status; confidence: number | null }>();
       for (const a of assess.data ?? []) if (!latestByOb.has(a.obligation_id)) latestByOb.set(a.obligation_id, { status: a.status as Status, confidence: a.confidence });
-      const obligations: ObligationRow[] = (obs.data ?? []).map((o) => ({ ...o, latest: latestByOb.get(o.id) ?? null }));
+      const obligations: ObligationRow[] = (obs.data ?? []).map((o) => ({
+        ...o,
+        is_required: (o as { is_required?: boolean }).is_required ?? true,
+        latest: latestByOb.get(o.id) ?? null,
+      }));
       return { obligations, tasks: tasks.data ?? [], steps: steps.data ?? [] };
     },
   });
@@ -51,13 +56,18 @@ function Dashboard() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const obs = dashboard.data?.obligations ?? [];
+  // Compliance metrics only count required documents. Recommended internal
+  // documents show separately and never count as "missing".
+  const allObs = dashboard.data?.obligations ?? [];
+  const obs = allObs.filter((o) => o.is_required);
+  const recommended = allObs.filter((o) => !o.is_required);
   const total = obs.length;
   const bucket = (s: Status | undefined) => obs.filter((o) => (o.latest?.status ?? "unknown") === s).length;
   const satisfied = bucket("satisfied");
   const partial = bucket("partially_satisfied");
   const missing = bucket("missing");
   const unknown = obs.filter((o) => !o.latest).length;
+  const recommendedOnFile = recommended.filter((o) => o.latest?.status === "satisfied").length;
   const avgConfidence = (() => {
     const withConf = obs.map((o) => o.latest?.confidence ?? null).filter((c): c is number => c != null);
     if (!withConf.length) return null;
@@ -81,13 +91,18 @@ function Dashboard() {
         </Button>
       </header>
 
-      <section className="mb-10 grid grid-cols-2 gap-3 md:grid-cols-5">
-        <Metric label="Known" value={total} />
+      <section className="mb-3 grid grid-cols-2 gap-3 md:grid-cols-5">
+        <Metric label="Required" value={total} />
         <Metric label="Satisfied" value={satisfied} tone="satisfied" />
         <Metric label="Partial" value={partial} tone="partial" />
         <Metric label="Missing" value={missing} tone="missing" />
         <Metric label="Unknown" value={unknown} tone="unknown" />
       </section>
+      {recommended.length > 0 && (
+        <p className="mb-10 text-xs text-muted-foreground">
+          Plus <span className="font-medium text-foreground">{recommendedOnFile} / {recommended.length}</span> recommended company documents on file. These don't affect compliance.
+        </p>
+      )}
 
       <section className="mb-10">
         <Card>

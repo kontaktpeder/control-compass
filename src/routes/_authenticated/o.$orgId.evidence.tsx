@@ -43,14 +43,25 @@ type EvidenceRow = {
   links: LinkRow[];
 };
 
-type Tab = "needs_review" | "linked" | "unlinked" | "all";
+type Tab = "all" | "needs_review" | "linked" | "internal" | "unlinked";
+
+const INTERNAL_TYPE_HINTS = [
+  "founders agreement",
+  "founder agreement",
+  "shareholder agreement",
+  "shareholders agreement",
+  "nda",
+  "non-disclosure",
+  "founder decision",
+  "internal",
+];
 
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
   const qc = useQueryClient();
   const confirmField = useServerFn(confirmEvidenceField);
   const [openReview, setOpenReview] = useState<Record<string, boolean>>({});
-  const [tab, setTab] = useState<Tab>("needs_review");
+  const [tab, setTab] = useState<Tab>("all");
 
   const documents = useQuery({
     queryKey: ["documents", orgId],
@@ -61,22 +72,31 @@ function DocumentsPage() {
           .eq("org_id", orgId)
           .order("created_at", { ascending: false }),
         supabase.from("evidence_links").select("id, evidence_id, obligation_id").eq("org_id", orgId),
-        supabase.from("obligations").select("id, title").eq("org_id", orgId),
+        supabase.from("obligations").select("id, title, is_required").eq("org_id", orgId),
       ]);
       if (ev.error) throw new Error(ev.error.message);
 
       const obTitle = new Map<string, string>();
-      for (const o of obs.data ?? []) obTitle.set(o.id, o.title);
+      const obRequired = new Map<string, boolean>();
+      for (const o of obs.data ?? []) {
+        obTitle.set(o.id, o.title);
+        obRequired.set(o.id, (o as { is_required?: boolean }).is_required ?? true);
+      }
       const linksByEv = new Map<string, LinkRow[]>();
       for (const l of links.data ?? []) {
         const arr = linksByEv.get(l.evidence_id) ?? [];
         arr.push({ id: l.id, obligation_id: l.obligation_id, title: obTitle.get(l.obligation_id) ?? "Unknown" });
         linksByEv.set(l.evidence_id, arr);
       }
-      return (ev.data ?? []).map((row) => ({
-        ...row,
-        links: linksByEv.get(row.id) ?? [],
-      })) as unknown as EvidenceRow[];
+      return (ev.data ?? []).map((row) => {
+        const rowLinks = linksByEv.get(row.id) ?? [];
+        const linksToRecommended = rowLinks.some((l) => obRequired.get(l.obligation_id) === false);
+        const type = (row.primary_document_type ?? "").toLowerCase();
+        const isInternal =
+          linksToRecommended ||
+          (rowLinks.length === 0 && INTERNAL_TYPE_HINTS.some((h) => type.includes(h)));
+        return { ...row, links: rowLinks, isInternal };
+      }) as unknown as Array<EvidenceRow & { isInternal: boolean }>;
     },
   });
 
@@ -93,15 +113,17 @@ function DocumentsPage() {
   const { visible, counts } = useMemo(() => {
     const list = documents.data ?? [];
     const counts = {
+      all:          list.length,
       needs_review: list.filter((d) => (d.review_status ?? "unknown") !== "confirmed").length,
       linked:       list.filter((d) => d.links.length > 0).length,
+      internal:     list.filter((d) => d.isInternal).length,
       unlinked:     list.filter((d) => d.links.length === 0).length,
-      all:          list.length,
     };
     const visible = list.filter((d) => {
       const review = (d.review_status as ReviewStatus) ?? "unknown";
       if (tab === "needs_review") return review !== "confirmed";
       if (tab === "linked") return d.links.length > 0;
+      if (tab === "internal") return d.isInternal;
       if (tab === "unlinked") return d.links.length === 0;
       return true;
     });
@@ -109,10 +131,11 @@ function DocumentsPage() {
   }, [documents.data, tab]);
 
   const tabs: Array<{ id: Tab; label: string }> = [
+    { id: "all",          label: `All · ${counts.all}` },
     { id: "needs_review", label: `Needs review · ${counts.needs_review}` },
     { id: "linked",       label: `Linked · ${counts.linked}` },
+    { id: "internal",     label: `Internal · ${counts.internal}` },
     { id: "unlinked",     label: `Unlinked · ${counts.unlinked}` },
-    { id: "all",          label: `All · ${counts.all}` },
   ];
 
   return (

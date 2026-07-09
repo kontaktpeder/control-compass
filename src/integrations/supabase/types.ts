@@ -271,6 +271,7 @@ export type Database = {
           evidence_requirements: string[] | null
           framework_id: string | null
           id: string
+          is_required: boolean
           org_id: string
           playbook_step_id: string | null
           responsible: string | null
@@ -285,6 +286,7 @@ export type Database = {
           evidence_requirements?: string[] | null
           framework_id?: string | null
           id?: string
+          is_required?: boolean
           org_id: string
           playbook_step_id?: string | null
           responsible?: string | null
@@ -299,6 +301,7 @@ export type Database = {
           evidence_requirements?: string[] | null
           framework_id?: string | null
           id?: string
+          is_required?: boolean
           org_id?: string
           playbook_step_id?: string | null
           responsible?: string | null

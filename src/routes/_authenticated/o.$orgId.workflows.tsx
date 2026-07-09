@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { StatusPill, type Status } from "@/components/status";
 import { DocumentUpload } from "@/components/document-upload";
 import { FileText, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/workflows")({
   component: WorkflowsPage,
@@ -17,6 +18,16 @@ type EvidenceLite = {
   review_status: string | null;
 };
 
+type ObligationRow = {
+  id: string;
+  title: string;
+  why: string | null;
+  playbook_step_id: string | null;
+  evidence_requirements: string[] | null;
+  responsible: string | null;
+  is_required: boolean | null;
+};
+
 function WorkflowsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/workflows" });
 
@@ -26,7 +37,7 @@ function WorkflowsPage() {
       const [pb, steps, obs, assess, links] = await Promise.all([
         supabase.from("playbooks").select("id, name, slug").eq("org_id", orgId).eq("slug", "incorporate_company").maybeSingle(),
         supabase.from("playbook_steps").select("id, title, description, order_index").eq("org_id", orgId).order("order_index"),
-        supabase.from("obligations").select("id, title, why, playbook_step_id, evidence_requirements, responsible").eq("org_id", orgId),
+        supabase.from("obligations").select("id, title, why, playbook_step_id, evidence_requirements, responsible, is_required").eq("org_id", orgId),
         supabase.from("assessments").select("obligation_id, status, created_at").eq("org_id", orgId).order("created_at", { ascending: false }),
         supabase.from("evidence_links").select("obligation_id, evidence:evidence_id(id, file_name, primary_document_type, review_status)").eq("org_id", orgId),
       ]);
@@ -42,7 +53,13 @@ function WorkflowsPage() {
         linkedByOb.set(l.obligation_id, arr);
       }
 
-      return { pb: pb.data, steps: steps.data ?? [], obs: obs.data ?? [], latest, linkedByOb };
+      return {
+        pb: pb.data,
+        steps: steps.data ?? [],
+        obs: (obs.data ?? []) as ObligationRow[],
+        latest,
+        linkedByOb,
+      };
     },
   });
 
@@ -51,14 +68,17 @@ function WorkflowsPage() {
       <p className="eyebrow">Workflow</p>
       <h1 className="mt-2 text-3xl font-semibold tracking-tight">{data.data?.pb?.name ?? "Incorporate a Company"}</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        A guided sequence. Each requirement traces back to the law or governance decision it comes from —
-        upload the real document straight into the step it belongs to.
+        A guided sequence. Required documents come from the law; company documents are recommended
+        internal agreements — upload the real thing straight into the step it belongs to.
       </p>
 
       <div className="mt-10 space-y-6">
         {(data.data?.steps ?? []).map((step) => {
           const stepObs = (data.data?.obs ?? []).filter((o) => o.playbook_step_id === step.id);
-          const done = stepObs.filter((o) => data.data?.latest.get(o.id) === "satisfied").length;
+          const required = stepObs.filter((o) => o.is_required !== false);
+          const company = stepObs.filter((o) => o.is_required === false);
+          const done = required.filter((o) => data.data?.latest.get(o.id) === "satisfied").length;
+
           return (
             <Card key={step.id}>
               <CardHeader>
@@ -69,80 +89,154 @@ function WorkflowsPage() {
                     <p className="mt-2 text-sm text-muted-foreground">{step.description}</p>
                   </div>
                   <span className="whitespace-nowrap text-sm text-muted-foreground">
-                    {done} / {stepObs.length} satisfied
+                    {done} / {required.length} required on file
                   </span>
                 </div>
               </CardHeader>
-              <CardContent className="pt-0">
-                <ul className="divide-y divide-border">
-                  {stepObs.map((o) => {
-                    const status = data.data?.latest.get(o.id) ?? "unknown";
-                    const evidence = data.data?.linkedByOb.get(o.id) ?? [];
-                    return (
-                      <li key={o.id} className="py-4">
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium">{o.title}</p>
-                              <StatusPill status={status} />
-                            </div>
-                            {o.why && (
-                              <p className="mt-1 text-xs text-muted-foreground">{o.why}</p>
-                            )}
-                            {o.responsible && (
-                              <p className="mt-1 text-xs text-muted-foreground">
-                                <span className="font-medium text-foreground/70">Responsible:</span> {o.responsible}
-                              </p>
-                            )}
-
-                            {evidence.length > 0 ? (
-                              <ul className="mt-3 space-y-1">
-                                {evidence.map((e) => (
-                                  <li key={e.id} className="flex items-center gap-2 text-xs text-muted-foreground">
-                                    <FileText className="h-3.5 w-3.5 text-primary" />
-                                    <span className="truncate">{e.file_name}</span>
-                                    {e.primary_document_type && (
-                                      <span className="text-muted-foreground/70">· {e.primary_document_type}</span>
-                                    )}
-                                    {e.review_status === "needs_review" && (
-                                      <span className="rounded-full bg-status-partial-bg px-1.5 py-0.5 text-[10px] font-medium text-status-partial">
-                                        review
-                                      </span>
-                                    )}
-                                  </li>
-                                ))}
-                              </ul>
-                            ) : (
-                              <p className="mt-3 text-xs italic text-muted-foreground">No document linked yet.</p>
-                            )}
-                          </div>
-
-                          <div className="flex shrink-0 flex-col items-end gap-2">
-                            <DocumentUpload
-                              orgId={orgId}
-                              hintObligationId={o.id}
-                              context="workflow"
-                              size="sm"
-                              label="Upload"
-                            />
-                            <Link
-                              to="/o/$orgId/obligations/$id"
-                              params={{ orgId, id: o.id }}
-                              className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
-                            >
-                              Details <ChevronRight className="h-3 w-3" />
-                            </Link>
-                          </div>
-                        </div>
-                      </li>
-                    );
-                  })}
-                </ul>
+              <CardContent className="pt-0 space-y-6">
+                {required.length > 0 && (
+                  <ObligationSection
+                    orgId={orgId}
+                    title="Required documents"
+                    subtitle="Legally required for this step."
+                    obligations={required}
+                    latest={data.data!.latest}
+                    linkedByOb={data.data!.linkedByOb}
+                    variant="required"
+                  />
+                )}
+                {company.length > 0 && (
+                  <ObligationSection
+                    orgId={orgId}
+                    title="Company documents"
+                    subtitle="Recommended internal agreements. Not required by law, but good practice."
+                    obligations={company}
+                    latest={data.data!.latest}
+                    linkedByOb={data.data!.linkedByOb}
+                    variant="recommended"
+                  />
+                )}
               </CardContent>
             </Card>
           );
         })}
       </div>
     </div>
+  );
+}
+
+function ObligationSection({
+  orgId,
+  title,
+  subtitle,
+  obligations,
+  latest,
+  linkedByOb,
+  variant,
+}: {
+  orgId: string;
+  title: string;
+  subtitle: string;
+  obligations: ObligationRow[];
+  latest: Map<string, Status>;
+  linkedByOb: Map<string, EvidenceLite[]>;
+  variant: "required" | "recommended";
+}) {
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">{title}</h3>
+          <p className="text-xs text-muted-foreground">{subtitle}</p>
+        </div>
+      </div>
+      <ul className="divide-y divide-border rounded-md border border-border/70">
+        {obligations.map((o) => {
+          const evidence = linkedByOb.get(o.id) ?? [];
+          const status = latest.get(o.id) ?? "unknown";
+          return (
+            <li key={o.id} className="p-4">
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <p className="text-sm font-medium">{o.title}</p>
+                    {variant === "required" ? (
+                      <StatusPill status={status} />
+                    ) : (
+                      <RecommendedPill status={status} hasEvidence={evidence.length > 0} />
+                    )}
+                  </div>
+                  {o.why && <p className="mt-1 text-xs text-muted-foreground">{o.why}</p>}
+                  {o.responsible && (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/70">Responsible:</span> {o.responsible}
+                    </p>
+                  )}
+
+                  {evidence.length > 0 ? (
+                    <ul className="mt-3 space-y-1">
+                      {evidence.map((e) => (
+                        <li key={e.id} className="flex items-center gap-2 text-xs text-muted-foreground">
+                          <FileText className="h-3.5 w-3.5 text-primary" />
+                          <span className="truncate">{e.file_name}</span>
+                          {e.primary_document_type && (
+                            <span className="text-muted-foreground/70">· {e.primary_document_type}</span>
+                          )}
+                          {e.review_status === "needs_review" && (
+                            <span className="rounded-full bg-status-partial-bg px-1.5 py-0.5 text-[10px] font-medium text-status-partial">
+                              review
+                            </span>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-3 text-xs italic text-muted-foreground">
+                      {variant === "recommended" ? "Not on file yet." : "No document linked yet."}
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex shrink-0 flex-col items-end gap-2">
+                  <DocumentUpload
+                    orgId={orgId}
+                    hintObligationId={o.id}
+                    context="workflow"
+                    size="sm"
+                    label="Upload"
+                  />
+                  <Link
+                    to="/o/$orgId/obligations/$id"
+                    params={{ orgId, id: o.id }}
+                    className="inline-flex items-center gap-0.5 text-xs text-muted-foreground hover:text-foreground hover:underline"
+                  >
+                    Details <ChevronRight className="h-3 w-3" />
+                  </Link>
+                </div>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function RecommendedPill({ status, hasEvidence }: { status: Status; hasEvidence: boolean }) {
+  // Recommended docs never render as "Missing". Only three visible states:
+  // On file, Needs review, or Recommended (nothing uploaded yet).
+  let label = "Recommended";
+  let tone = "bg-status-unknown-bg text-status-unknown";
+  if (status === "satisfied") {
+    label = "On file";
+    tone = "bg-status-satisfied-bg text-status-satisfied";
+  } else if (hasEvidence || status === "needs_review" || status === "partially_satisfied") {
+    label = "Needs review";
+    tone = "bg-status-partial-bg text-status-partial";
+  }
+  return (
+    <span className={cn("inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", tone)}>
+      {label}
+    </span>
   );
 }
