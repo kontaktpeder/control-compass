@@ -15,6 +15,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedOrgsRouteImport } from './routes/_authenticated/orgs'
 import { Route as AuthenticatedOOrgIdRouteImport } from './routes/_authenticated/o.$orgId'
 import { Route as AuthenticatedOOrgIdIndexRouteImport } from './routes/_authenticated/o.$orgId.index'
+import { Route as AuthenticatedOOrgIdWorkflowsRouteImport } from './routes/_authenticated/o.$orgId.workflows'
 import { Route as AuthenticatedOOrgIdTasksRouteImport } from './routes/_authenticated/o.$orgId.tasks'
 import { Route as AuthenticatedOOrgIdObligationsRouteImport } from './routes/_authenticated/o.$orgId.obligations'
 import { Route as AuthenticatedOOrgIdEvidenceRouteImport } from './routes/_authenticated/o.$orgId.evidence'
@@ -50,6 +51,12 @@ const AuthenticatedOOrgIdIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
+const AuthenticatedOOrgIdWorkflowsRoute =
+  AuthenticatedOOrgIdWorkflowsRouteImport.update({
+    id: '/workflows',
+    path: '/workflows',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
 const AuthenticatedOOrgIdTasksRoute =
   AuthenticatedOOrgIdTasksRouteImport.update({
     id: '/tasks',
@@ -83,6 +90,7 @@ export interface FileRoutesByFullPath {
   '/o/$orgId/evidence': typeof AuthenticatedOOrgIdEvidenceRoute
   '/o/$orgId/obligations': typeof AuthenticatedOOrgIdObligationsRouteWithChildren
   '/o/$orgId/tasks': typeof AuthenticatedOOrgIdTasksRoute
+  '/o/$orgId/workflows': typeof AuthenticatedOOrgIdWorkflowsRoute
   '/o/$orgId/': typeof AuthenticatedOOrgIdIndexRoute
   '/o/$orgId/obligations/$id': typeof AuthenticatedOOrgIdObligationsIdRoute
 }
@@ -93,6 +101,7 @@ export interface FileRoutesByTo {
   '/o/$orgId/evidence': typeof AuthenticatedOOrgIdEvidenceRoute
   '/o/$orgId/obligations': typeof AuthenticatedOOrgIdObligationsRouteWithChildren
   '/o/$orgId/tasks': typeof AuthenticatedOOrgIdTasksRoute
+  '/o/$orgId/workflows': typeof AuthenticatedOOrgIdWorkflowsRoute
   '/o/$orgId': typeof AuthenticatedOOrgIdIndexRoute
   '/o/$orgId/obligations/$id': typeof AuthenticatedOOrgIdObligationsIdRoute
 }
@@ -106,6 +115,7 @@ export interface FileRoutesById {
   '/_authenticated/o/$orgId/evidence': typeof AuthenticatedOOrgIdEvidenceRoute
   '/_authenticated/o/$orgId/obligations': typeof AuthenticatedOOrgIdObligationsRouteWithChildren
   '/_authenticated/o/$orgId/tasks': typeof AuthenticatedOOrgIdTasksRoute
+  '/_authenticated/o/$orgId/workflows': typeof AuthenticatedOOrgIdWorkflowsRoute
   '/_authenticated/o/$orgId/': typeof AuthenticatedOOrgIdIndexRoute
   '/_authenticated/o/$orgId/obligations/$id': typeof AuthenticatedOOrgIdObligationsIdRoute
 }
@@ -119,6 +129,7 @@ export interface FileRouteTypes {
     | '/o/$orgId/evidence'
     | '/o/$orgId/obligations'
     | '/o/$orgId/tasks'
+    | '/o/$orgId/workflows'
     | '/o/$orgId/'
     | '/o/$orgId/obligations/$id'
   fileRoutesByTo: FileRoutesByTo
@@ -129,6 +140,7 @@ export interface FileRouteTypes {
     | '/o/$orgId/evidence'
     | '/o/$orgId/obligations'
     | '/o/$orgId/tasks'
+    | '/o/$orgId/workflows'
     | '/o/$orgId'
     | '/o/$orgId/obligations/$id'
   id:
@@ -141,6 +153,7 @@ export interface FileRouteTypes {
     | '/_authenticated/o/$orgId/evidence'
     | '/_authenticated/o/$orgId/obligations'
     | '/_authenticated/o/$orgId/tasks'
+    | '/_authenticated/o/$orgId/workflows'
     | '/_authenticated/o/$orgId/'
     | '/_authenticated/o/$orgId/obligations/$id'
   fileRoutesById: FileRoutesById
@@ -195,6 +208,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgIdIndexRouteImport
       parentRoute: typeof AuthenticatedOOrgIdRoute
     }
+    '/_authenticated/o/$orgId/workflows': {
+      id: '/_authenticated/o/$orgId/workflows'
+      path: '/workflows'
+      fullPath: '/o/$orgId/workflows'
+      preLoaderRoute: typeof AuthenticatedOOrgIdWorkflowsRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
+    }
     '/_authenticated/o/$orgId/tasks': {
       id: '/_authenticated/o/$orgId/tasks'
       path: '/tasks'
@@ -245,6 +265,7 @@ interface AuthenticatedOOrgIdRouteChildren {
   AuthenticatedOOrgIdEvidenceRoute: typeof AuthenticatedOOrgIdEvidenceRoute
   AuthenticatedOOrgIdObligationsRoute: typeof AuthenticatedOOrgIdObligationsRouteWithChildren
   AuthenticatedOOrgIdTasksRoute: typeof AuthenticatedOOrgIdTasksRoute
+  AuthenticatedOOrgIdWorkflowsRoute: typeof AuthenticatedOOrgIdWorkflowsRoute
   AuthenticatedOOrgIdIndexRoute: typeof AuthenticatedOOrgIdIndexRoute
 }
 
@@ -253,6 +274,7 @@ const AuthenticatedOOrgIdRouteChildren: AuthenticatedOOrgIdRouteChildren = {
   AuthenticatedOOrgIdObligationsRoute:
     AuthenticatedOOrgIdObligationsRouteWithChildren,
   AuthenticatedOOrgIdTasksRoute: AuthenticatedOOrgIdTasksRoute,
+  AuthenticatedOOrgIdWorkflowsRoute: AuthenticatedOOrgIdWorkflowsRoute,
   AuthenticatedOOrgIdIndexRoute: AuthenticatedOOrgIdIndexRoute,
 }
 
