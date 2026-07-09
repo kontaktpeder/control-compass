@@ -1,7 +1,7 @@
 import { createFileRoute, Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, LayoutDashboard, FileText, Workflow, CheckSquare, Building2, LogOut } from "lucide-react";
+import { ShieldCheck, FileText, ClipboardList, Building2, LogOut } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
