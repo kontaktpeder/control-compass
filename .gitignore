@@ -15,6 +15,9 @@ dist-ssr
 .tanstack/**
 .nitro
 *.local
+# Committed .env = public anon keys for Lovable Vite. Secrets → .env.local only.
+.env.*
+!.env.example
 
 # Wrangler / Cloudflare
 .wrangler/
