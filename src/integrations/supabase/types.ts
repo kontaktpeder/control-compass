@@ -14,6 +14,82 @@ export type Database = {
   }
   public: {
     Tables: {
+      api_clients: {
+        Row: {
+          allowed_scopes: Database["public"]["Enums"]["api_scope"][]
+          created_at: string
+          created_by: string
+          id: string
+          last_used_at: string | null
+          name: string
+          organization_id: string
+          revoked_at: string | null
+        }
+        Insert: {
+          allowed_scopes?: Database["public"]["Enums"]["api_scope"][]
+          created_at?: string
+          created_by: string
+          id?: string
+          last_used_at?: string | null
+          name: string
+          organization_id: string
+          revoked_at?: string | null
+        }
+        Update: {
+          allowed_scopes?: Database["public"]["Enums"]["api_scope"][]
+          created_at?: string
+          created_by?: string
+          id?: string
+          last_used_at?: string | null
+          name?: string
+          organization_id?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_clients_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      api_keys: {
+        Row: {
+          api_client_id: string
+          created_at: string
+          id: string
+          key_hash: string
+          key_prefix: string
+          revoked_at: string | null
+        }
+        Insert: {
+          api_client_id: string
+          created_at?: string
+          id?: string
+          key_hash: string
+          key_prefix: string
+          revoked_at?: string | null
+        }
+        Update: {
+          api_client_id?: string
+          created_at?: string
+          id?: string
+          key_hash?: string
+          key_prefix?: string
+          revoked_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "api_keys_api_client_id_fkey"
+            columns: ["api_client_id"]
+            isOneToOne: false
+            referencedRelation: "api_clients"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       assessments: {
         Row: {
           confidence: number | null
@@ -651,6 +727,12 @@ export type Database = {
       seed_incorporate_playbook: { Args: { _org: string }; Returns: undefined }
     }
     Enums: {
+      api_scope:
+        | "obligations:read"
+        | "evidence:read"
+        | "tasks:read"
+        | "platform:read"
+        | "platform:verify"
       app_role: "admin" | "user"
       assessment_status:
         | "satisfied"
@@ -788,6 +870,13 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      api_scope: [
+        "obligations:read",
+        "evidence:read",
+        "tasks:read",
+        "platform:read",
+        "platform:verify",
+      ],
       app_role: ["admin", "user"],
       assessment_status: [
         "satisfied",
