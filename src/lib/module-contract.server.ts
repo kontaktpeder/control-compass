@@ -16,6 +16,8 @@ export const controlModuleInfo = {
     "control.evidence",
     "control.tasks",
     "control.playbooks",
+    "control.agreements",
+    "control.agreements.write",
   ],
 } as const;
 
@@ -25,6 +27,7 @@ export const controlModuleDeepLinks = {
   org_evidence: "/o/{org_id}/evidence",
   org_tasks: "/o/{org_id}/tasks",
   org_obligations: "/o/{org_id}/obligations",
+  org_agreements: "/o/{org_id}/agreements",
 } as const;
 
 export const controlModuleWidgets = [

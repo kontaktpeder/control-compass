@@ -14,6 +14,65 @@ export type Database = {
   }
   public: {
     Tables: {
+      agreements: {
+        Row: {
+          agreement_type: Database["public"]["Enums"]["agreement_type"]
+          body: string
+          counterparty_name: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          metadata: Json
+          org_id: string
+          source: string
+          source_ref: string | null
+          status: Database["public"]["Enums"]["agreement_status"]
+          title: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          agreement_type?: Database["public"]["Enums"]["agreement_type"]
+          body?: string
+          counterparty_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json
+          org_id: string
+          source?: string
+          source_ref?: string | null
+          status?: Database["public"]["Enums"]["agreement_status"]
+          title: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          agreement_type?: Database["public"]["Enums"]["agreement_type"]
+          body?: string
+          counterparty_name?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          metadata?: Json
+          org_id?: string
+          source?: string
+          source_ref?: string | null
+          status?: Database["public"]["Enums"]["agreement_status"]
+          title?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "agreements_org_id_fkey"
+            columns: ["org_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       api_clients: {
         Row: {
           allowed_scopes: Database["public"]["Enums"]["api_scope"][]
@@ -727,10 +786,14 @@ export type Database = {
       seed_incorporate_playbook: { Args: { _org: string }; Returns: undefined }
     }
     Enums: {
+      agreement_status: "draft" | "review" | "signing" | "signed" | "archived"
+      agreement_type: "shareholder" | "nda" | "employment" | "contractor" | "other"
       api_scope:
         | "obligations:read"
         | "evidence:read"
         | "tasks:read"
+        | "agreements:read"
+        | "agreements:write"
         | "platform:read"
         | "platform:verify"
       app_role: "admin" | "user"
@@ -870,10 +933,14 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      agreement_status: ["draft", "review", "signing", "signed", "archived"],
+      agreement_type: ["shareholder", "nda", "employment", "contractor", "other"],
       api_scope: [
         "obligations:read",
         "evidence:read",
         "tasks:read",
+        "agreements:read",
+        "agreements:write",
         "platform:read",
         "platform:verify",
       ],

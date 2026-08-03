@@ -32,11 +32,11 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
         data: {
           organizationId: orgId,
           name: "platform-verify",
-          scopes: ["platform:read", "platform:verify"],
+          scopes: ["platform:read", "platform:verify", "agreements:write", "agreements:read"],
         },
       });
       setIssuedToken(res.token);
-      toast.success("Platform verify key created");
+      toast.success("Platform handoff key created");
     } catch (e: unknown) {
       toast.error(e instanceof Error ? e.message : "Could not create key");
     } finally {
@@ -49,9 +49,10 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
       <CardHeader>
         <CardTitle className="text-base">Platform linking (Nexus)</CardTitle>
         <CardDescription>
-          Paste these values in Nexus → Modules when connecting Control. Use a key with{" "}
-          <code className="font-mono text-xs">platform:read</code> +{" "}
-          <code className="font-mono text-xs">platform:verify</code>.
+          Paste these values in Nexus → Modules when connecting Control. Key includes{" "}
+          <code className="font-mono text-xs">platform:read</code>,{" "}
+          <code className="font-mono text-xs">platform:verify</code> and agreement
+          handoff scopes so Fortell can send drafts into Control.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -90,7 +91,7 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => void createPlatformVerifyKey()} disabled={busy}>
             <KeyRound className="mr-2 h-4 w-4" />
-            {busy ? "Creating…" : "Create platform-verify key"}
+            {busy ? "Creating…" : "Create platform handoff key"}
           </Button>
           <Button type="button" variant="outline" asChild>
             <Link to="/o/$orgId/settings" params={{ orgId }}>

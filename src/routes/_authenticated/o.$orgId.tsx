@@ -1,7 +1,15 @@
 import { createFileRoute, Link, Outlet, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
-import { ShieldCheck, FileText, ClipboardList, Building2, LogOut, Settings } from "lucide-react";
+import {
+  ShieldCheck,
+  FileText,
+  ClipboardList,
+  Building2,
+  LogOut,
+  Settings,
+  FileSignature,
+} from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 
@@ -29,6 +37,7 @@ function OrgShell() {
   const navItems: Array<{ to: string; label: string; icon: typeof ClipboardList; end?: boolean }> = [
     { to: "/o/$orgId/workflows", label: "Register Company", icon: ClipboardList },
     { to: "/o/$orgId/evidence", label: "Documents", icon: FileText },
+    { to: "/o/$orgId/agreements", label: "Agreements", icon: FileSignature },
     { to: "/o/$orgId/settings", label: "Settings", icon: Settings },
   ];
 

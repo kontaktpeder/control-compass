@@ -38,6 +38,19 @@ Wrong `org_id` on verify → **404** (not 403).
 | `open_tasks` | Open tasks | `org_tasks` |
 | `open_obligations` | Open obligations | `org_obligations` |
 
+## Agreements (domain write — Nexus handoff)
+
+Control owns agreements (draft → review → signing → signed → archived).
+Nexus/Fortell may only **create drafts**; signing/version/archive stay in Control.
+
+| Endpoint | Method | Scope |
+|----------|--------|-------|
+| `/api/public/v1/agreements` | POST | `agreements:write` or `platform:read` |
+| `/api/public/v1/agreements/{id}` | GET | `agreements:read` or `platform:read` |
+
+POST body: `{ title, body, agreement_type?, counterparty_name?, source?, source_ref?, metadata? }`  
+Creates `status: draft`, `source: nexus_fortell` when called from Fortell.
+
 ## Capabilities
 
 - `platform.health`
@@ -47,6 +60,8 @@ Wrong `org_id` on verify → **404** (not 403).
 - `control.evidence`
 - `control.tasks`
 - `control.playbooks`
+- `control.agreements`
+- `control.agreements.write`
 
 ## Platform verify key
 

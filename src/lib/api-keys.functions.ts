@@ -6,6 +6,8 @@ const ScopeSchema = z.enum([
   "obligations:read",
   "evidence:read",
   "tasks:read",
+  "agreements:read",
+  "agreements:write",
   "platform:read",
   "platform:verify",
 ]);

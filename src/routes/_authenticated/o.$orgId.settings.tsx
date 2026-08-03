@@ -45,7 +45,7 @@ function OrgSettingsPage() {
         data: {
           organizationId: orgId,
           name: "platform-verify",
-          scopes: ["platform:read", "platform:verify"],
+          scopes: ["platform:read", "platform:verify", "agreements:write", "agreements:read"],
         },
       });
       setIssuedToken(res.token);
