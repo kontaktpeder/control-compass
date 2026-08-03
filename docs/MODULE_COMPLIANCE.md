@@ -41,15 +41,20 @@ Wrong `org_id` on verify → **404** (not 403).
 ## Agreements (domain write — Nexus handoff)
 
 Control owns agreements (draft → review → signing → signed → archived).
-Nexus/Fortell may only **create drafts**; signing/version/archive stay in Control.
+Nexus/Fortell may **create drafts**, **list/read**, and **patch draft bodies**.
+Signing/version UI/archive stay in Control.
 
 | Endpoint | Method | Scope |
 |----------|--------|-------|
+| `/api/public/v1/agreements` | GET | `agreements:read` or `platform:read` |
 | `/api/public/v1/agreements` | POST | `agreements:write` or `platform:read` |
 | `/api/public/v1/agreements/{id}` | GET | `agreements:read` or `platform:read` |
+| `/api/public/v1/agreements/{id}` | PATCH | `agreements:write` or `platform:read` |
 
+GET list query: `q?`, `status?`, `limit?` (default 40).  
 POST body: `{ title, body, agreement_type?, counterparty_name?, source?, source_ref?, metadata? }`  
-Creates `status: draft`, `source: nexus_fortell` when called from Fortell.
+Creates `status: draft`, `source: nexus_fortell` when called from Fortell.  
+PATCH body (draft only): `{ title?, body?, agreement_type?, counterparty_name?, source_ref?, metadata? }` — bumps `version`.
 
 ## Capabilities
 
