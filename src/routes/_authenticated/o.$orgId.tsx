@@ -91,6 +91,25 @@ function OrgShell() {
           </div>
         </aside>
         <main className="flex-1 overflow-auto">
+          <header className="flex items-center gap-3 border-b border-border px-4 py-3 md:hidden">
+            <Link to="/orgs" className="flex items-center gap-2 text-sm font-semibold">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+              <span className="truncate">{org.data?.name ?? "Control"}</span>
+            </Link>
+            <nav className="ml-auto flex max-w-[60%] gap-1 overflow-x-auto text-xs">
+              {navItems.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  params={{ orgId }}
+                  activeProps={{ className: "bg-muted font-medium text-foreground" }}
+                  className="shrink-0 rounded-md px-2 py-1.5 text-muted-foreground"
+                >
+                  {item.label}
+                </Link>
+              ))}
+            </nav>
+          </header>
           <Outlet />
         </main>
       </div>

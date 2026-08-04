@@ -1,5 +1,6 @@
 import { createFileRoute, useNavigate, redirect, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { lovable } from "@/integrations/lovable";
 import { Button } from "@/components/ui/button";
@@ -10,17 +11,37 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
 
+function safeReturnTo(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const v = value.trim();
+  if (!v.startsWith("/") || v.startsWith("//")) return null;
+  if (v.startsWith("/auth")) return null;
+  return v;
+}
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
-  beforeLoad: async () => {
+  validateSearch: z.object({
+    returnTo: z.string().optional(),
+  }).parse,
+  beforeLoad: async ({ search }) => {
     const { data } = await supabase.auth.getUser();
-    if (data.user) throw redirect({ to: "/orgs" });
+    if (!data.user) return;
+    const dest = safeReturnTo(search.returnTo);
+    // Deep links from Nexus (e.g. /o/.../agreements/:id) must survive login.
+    if (dest && typeof window !== "undefined") {
+      window.location.replace(dest);
+      return;
+    }
+    throw redirect({ to: "/orgs" });
   },
   component: AuthPage,
 });
 
 function AuthPage() {
   const navigate = useNavigate();
+  const { returnTo } = Route.useSearch();
+  const dest = safeReturnTo(returnTo);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -28,10 +49,16 @@ function AuthPage() {
 
   useEffect(() => {
     const { data } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === "SIGNED_IN" && session) navigate({ to: "/orgs" });
+      if (event === "SIGNED_IN" && session) {
+        if (dest) {
+          window.location.assign(dest);
+          return;
+        }
+        void navigate({ to: "/orgs" });
+      }
     });
     return () => data.subscription.unsubscribe();
-  }, [navigate]);
+  }, [navigate, dest]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
