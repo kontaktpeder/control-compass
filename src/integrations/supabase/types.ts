@@ -222,6 +222,11 @@ export type Database = {
           review_status: string
           size_bytes: number | null
           uploaded_by: string
+          category: Database["public"]["Enums"]["document_category"] | null
+          ai_category: Database["public"]["Enums"]["document_category"] | null
+          ai_category_confidence: number | null
+          responsible_user_id: string | null
+          review_due_at: string | null
         }
         Insert: {
           ai_alternatives?: Json
@@ -247,6 +252,11 @@ export type Database = {
           review_status?: string
           size_bytes?: number | null
           uploaded_by: string
+          category?: Database["public"]["Enums"]["document_category"] | null
+          ai_category?: Database["public"]["Enums"]["document_category"] | null
+          ai_category_confidence?: number | null
+          responsible_user_id?: string | null
+          review_due_at?: string | null
         }
         Update: {
           ai_alternatives?: Json
@@ -272,6 +282,11 @@ export type Database = {
           review_status?: string
           size_bytes?: number | null
           uploaded_by?: string
+          category?: Database["public"]["Enums"]["document_category"] | null
+          ai_category?: Database["public"]["Enums"]["document_category"] | null
+          ai_category_confidence?: number | null
+          responsible_user_id?: string | null
+          review_due_at?: string | null
         }
         Relationships: [
           {
@@ -803,6 +818,7 @@ export type Database = {
         | "missing"
         | "needs_review"
         | "unknown"
+      document_category: "operations" | "finance" | "contracts" | "hr" | "reference"
       member_role: "owner" | "member"
       org_kind: "holding" | "operating" | "sole_prop" | "other"
       task_status: "open" | "done" | "dismissed"
@@ -952,6 +968,7 @@ export const Constants = {
         "needs_review",
         "unknown",
       ],
+      document_category: ["operations", "finance", "contracts", "hr", "reference"],
       member_role: ["owner", "member"],
       org_kind: ["holding", "operating", "sole_prop", "other"],
       task_status: ["open", "done", "dismissed"],

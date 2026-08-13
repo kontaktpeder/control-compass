@@ -3,6 +3,7 @@ import { z } from "zod";
 import { generateObject, NoObjectGeneratedError } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createLovableAiGatewayProvider, requireLovableApiKey } from "./ai-gateway.server";
+import { DOCUMENT_CATEGORY_IDS, isDocumentCategory, type DocumentCategory } from "@/lib/library";
 
 function tryParseJson(raw: string | undefined): any {
   if (!raw) return null;
@@ -47,7 +48,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
     const { data: ev, error } = await supabase
       .from("evidence")
-      .select("id, org_id, file_path, file_name, mime_type")
+      .select("id, org_id, file_path, file_name, mime_type, category")
       .eq("id", data.evidence_id)
       .single();
     if (error || !ev) throw new Error(error?.message ?? "Evidence not found");
@@ -93,6 +94,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     const identifySchema = z.object({
       document_type_candidates: z.array(candidate),
       purpose_candidates: z.array(candidate),
+      category: z.enum(DOCUMENT_CATEGORY_IDS),
+      category_confidence: z.number(),
       summary: z.string(),
       reasoning: z.string(),
     });
@@ -101,6 +104,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     let identified: Identify = {
       document_type_candidates: [],
       purpose_candidates: [],
+      category: "reference",
+      category_confidence: 0,
       summary: "AI could not read this document.",
       reasoning: "Identification stage did not run.",
     };
@@ -133,6 +138,15 @@ export const classifyEvidence = createServerFn({ method: "POST" })
               "\"Privacy\", \"Board Governance\", \"Operational Documentation\",",
               "\"Supplier Management\", \"Customer Management\", \"Investment\".",
               "",
+              "Also return a library category (exactly one of: operations, finance, contracts, hr, reference)",
+              "and category_confidence (0-1).",
+              "- operations: production, HACCP, suppliers, day-to-day operations",
+              "- finance: accounting, invoices, tax, investment",
+              "- contracts: commercial agreements, NDAs, shareholder/founder agreements",
+              "- hr: employment, personnel, staffing",
+              "- reference: models, templates, knowledge, historical material",
+              "Category is independent of legal obligations — every document gets a home.",
+              "",
               "Do NOT try to match against legal obligations at this stage.",
               "Also return a one-sentence plain-language English summary of the document contents.",
               "",
@@ -150,6 +164,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
         identified = {
           document_type_candidates: Array.isArray(parsed.document_type_candidates) ? parsed.document_type_candidates : [],
           purpose_candidates: Array.isArray(parsed.purpose_candidates) ? parsed.purpose_candidates : [],
+          category: isDocumentCategory(parsed.category) ? parsed.category : "reference",
+          category_confidence: typeof parsed.category_confidence === "number" ? parsed.category_confidence : 0,
           summary: parsed.summary ?? identified.summary,
           reasoning: parsed.reasoning ?? (e instanceof Error ? e.message : "identification failed"),
         };
@@ -278,7 +294,13 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
 
 
+    const suggestedCategory: DocumentCategory | null =
+      identified.category_confidence >= 0.3 && isDocumentCategory(identified.category)
+        ? identified.category
+        : null;
+
     // --- Stage 4: persist AI metadata on evidence (candidates only, no product status) ---
+    // Never overwrite a human-set category; always record the AI suggestion.
     await supabase.from("evidence").update({
       ai_summary: identified.summary,
       ai_confidence: primaryDoc?.confidence ?? 0,
@@ -295,6 +317,9 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       classification_status,
       ai_alternatives: docCandidates as unknown as any,
       ai_reasoning: `${identified.reasoning}\n\nRelationship: ${matched.reasoning}`,
+      ai_category: suggestedCategory,
+      ai_category_confidence: identified.category_confidence || null,
+      ...(ev.category ? {} : { category: suggestedCategory }),
     } as any).eq("id", ev.id);
 
     // --- Stage 5: assignment updates ---------------------------------------
@@ -394,6 +419,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       classification_status,
       summary: identified.summary,
       linked_obligation_ids: linkedArray,
+      category: ev.category ?? suggestedCategory,
+      ai_category: suggestedCategory,
     };
   });
 
