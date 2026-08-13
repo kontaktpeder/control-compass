@@ -5,6 +5,7 @@ import { StatusPill, type Status } from "@/components/status";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
 import { useT } from "@/components/locale-provider";
+import { localizeFrameworkName, localizeObligation } from "@/lib/playbook-i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/")({
   component: ObligationsList,
@@ -13,7 +14,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/")({
 function ObligationsList() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/obligations/" });
   const [q, setQ] = useState("");
-  const { t } = useT();
+  const { t, locale } = useT();
 
   const data = useQuery({
     queryKey: ["obligations", orgId],
@@ -30,9 +31,14 @@ function ObligationsList() {
     },
   });
 
-  const items = (data.data ?? []).filter((o) =>
-    !q || o.title.toLowerCase().includes(q.toLowerCase()),
-  );
+  const items = (data.data ?? [])
+    .map((o) => {
+      const loc = localizeObligation(locale, o);
+      return { ...loc, fw: localizeFrameworkName(locale, o.fw) ?? "—", status: o.status };
+    })
+    .filter((o) =>
+      !q || o.title.toLowerCase().includes(q.toLowerCase()),
+    );
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">

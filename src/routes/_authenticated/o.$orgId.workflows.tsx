@@ -9,6 +9,7 @@ import { DocumentReviewPanel, type ReviewAssignment } from "@/components/documen
 import { toast } from "sonner";
 import { FileText, ChevronRight, ExternalLink, ExternalLink as LinkIcon } from "lucide-react";
 import { useT } from "@/components/locale-provider";
+import { localizeObligation, localizeSourceAuthority } from "@/lib/playbook-i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/workflows")({
   component: RegisterCompanyPage,
@@ -78,7 +79,7 @@ function lifecycleFor(a: Assignment | undefined): DocLifecycle {
 
 function RegisterCompanyPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/workflows" });
-  const { t } = useT();
+  const { t, locale } = useT();
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
 
   const data = useQuery({
@@ -109,7 +110,15 @@ function RegisterCompanyPage() {
     },
   });
 
-  const obs = data.data?.obs ?? [];
+  const obs = (data.data?.obs ?? []).map((o) => {
+    const loc = localizeObligation(locale, o);
+    return {
+      ...loc,
+      source: o.source
+        ? { ...o.source, authority: localizeSourceAuthority(locale, o.source.authority) }
+        : o.source,
+    };
+  });
   const byOb = data.data?.byOb ?? new Map<string, Assignment>();
   const required = obs.filter((o) => o.is_required !== false);
   const company = obs.filter((o) => o.is_required === false);

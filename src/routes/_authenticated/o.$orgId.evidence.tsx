@@ -18,6 +18,7 @@ import {
 } from "@/lib/library";
 import { useT } from "@/components/locale-provider";
 import type { MessageKey } from "@/lib/i18n";
+import { localizeObligationTitle } from "@/lib/playbook-i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
   component: DocumentsPage,
@@ -45,7 +46,7 @@ type ChipFilter = "mine" | "needs_review" | "overdue" | "linked";
 
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
-  const { t, dateLocale } = useT();
+  const { t, dateLocale, locale } = useT();
   const [tab, setTab] = useState<CategoryTab>("all");
   const [chips, setChips] = useState<ChipFilter[]>([]);
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
@@ -191,7 +192,7 @@ function DocumentsPage() {
     setReviewing({
       assignment_id: a.id,
       obligation_id: d.obligation.id,
-      obligation_title: d.obligation.title,
+      obligation_title: localizeObligationTitle(locale, d.obligation.title),
       status: a.status,
       evidence_id: d.id,
       file_name: d.title,
@@ -335,7 +336,7 @@ function DocumentsPage() {
                             params={{ orgId, id: d.obligation.id }}
                             className="rounded-md bg-muted px-2 py-0.5 hover:bg-muted/70 hover:underline"
                           >
-                            {d.obligation.title}
+                            {localizeObligationTitle(locale, d.obligation.title)}
                           </Link>
                         </div>
                       )}

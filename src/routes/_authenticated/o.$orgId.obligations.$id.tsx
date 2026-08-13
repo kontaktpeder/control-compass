@@ -9,6 +9,7 @@ import { assessObligation } from "@/lib/ai.functions";
 import { toast } from "sonner";
 import { ArrowLeft, Sparkles, FileText } from "lucide-react";
 import { useT } from "@/components/locale-provider";
+import { localizeFrameworkName, localizeObligation, localizeSourceAuthority } from "@/lib/playbook-i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/$id")({
   component: ObligationDetail,
@@ -16,7 +17,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/$id")
 
 function ObligationDetail() {
   const { orgId, id } = useParams({ from: "/_authenticated/o/$orgId/obligations/$id" });
-  const { t, dateLocale } = useT();
+  const { t, locale, dateLocale } = useT();
   const qc = useQueryClient();
   const assess = useServerFn(assessObligation);
 
@@ -47,9 +48,13 @@ function ObligationDetail() {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const ob = data.data?.ob;
+  const ob = data.data?.ob
+    ? localizeObligation(locale, data.data.ob)
+    : data.data?.ob;
   const latest = data.data?.assessments[0];
   const status = (latest?.status as Status) ?? "unknown";
+  const fwName = localizeFrameworkName(locale, data.data?.fw?.name);
+  const srcAuthority = localizeSourceAuthority(locale, data.data?.src?.authority);
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -59,11 +64,11 @@ function ObligationDetail() {
 
       <div className="flex items-start justify-between gap-6">
         <div>
-          <p className="eyebrow">{data.data?.fw?.name ?? t("obligations.eyebrow")}</p>
+          <p className="eyebrow">{fwName ?? t("obligations.eyebrow")}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">{ob?.title}</h1>
           {data.data?.src && (
             <p className="mt-2 text-sm text-muted-foreground">
-              {t("obligations.source")} {data.data.src.authority}{data.data.src.reference ? ` · ${data.data.src.reference}` : ""}
+              {t("obligations.source")} {srcAuthority}{data.data.src.reference ? ` · ${data.data.src.reference}` : ""}
             </p>
           )}
         </div>
