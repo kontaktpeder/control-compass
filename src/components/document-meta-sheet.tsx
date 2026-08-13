@@ -5,7 +5,6 @@ import { supabase } from "@/integrations/supabase/client";
 import { updateDocumentMeta } from "@/lib/library.functions";
 import {
   DOCUMENT_CATEGORIES,
-  categoryLabel,
   type DocumentCategory,
 } from "@/lib/library";
 import { Button } from "@/components/ui/button";
@@ -21,6 +20,8 @@ import {
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Sparkles } from "lucide-react";
+import { useT } from "@/components/locale-provider";
+import type { MessageKey } from "@/lib/i18n";
 
 type Props = {
   open: boolean;
@@ -32,6 +33,7 @@ type Props = {
 const NONE = "__none__";
 
 export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Props) {
+  const { t } = useT();
   const qc = useQueryClient();
   const saveFn = useServerFn(updateDocumentMeta);
   const [category, setCategory] = useState<string>(NONE);
@@ -71,8 +73,8 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
         .select("id, full_name")
         .in("id", ids);
       if (pErr) throw new Error(pErr.message);
-      const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name?.trim() || "Unnamed"]));
-      return ids.map((id) => ({ id, name: nameById.get(id) ?? "Unnamed" }));
+      const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name?.trim() || t("common.unnamed")]));
+      return ids.map((id) => ({ id, name: nameById.get(id) ?? t("common.unnamed") }));
     },
   });
 
@@ -95,7 +97,7 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
           review_due_at: reviewDueAt.trim() ? reviewDueAt : null,
         },
       });
-      toast.success("Saved");
+      toast.success(t("meta.saved"));
       await qc.invalidateQueries();
       onOpenChange(false);
     } catch (e) {
@@ -112,10 +114,10 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <p className="eyebrow">Document</p>
-          <SheetTitle className="mt-1 text-xl">Edit filing</SheetTitle>
+          <p className="eyebrow">{t("meta.eyebrow")}</p>
+          <SheetTitle className="mt-1 text-xl">{t("meta.title")}</SheetTitle>
           <SheetDescription>
-            Category and owner are independent of compliance. Link to a requirement only when it belongs there.
+            {t("meta.hint")}
           </SheetDescription>
         </SheetHeader>
 
@@ -130,36 +132,38 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
           )}
 
           <div className="space-y-2">
-            <Label>Category</Label>
+            <Label>{t("meta.category")}</Label>
             <Select value={category} onValueChange={setCategory}>
               <SelectTrigger>
-                <SelectValue placeholder="Uncategorized" />
+                <SelectValue placeholder={t("category.uncategorized")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>Uncategorized</SelectItem>
+                <SelectItem value={NONE}>{t("category.uncategorized")}</SelectItem>
                 {DOCUMENT_CATEGORIES.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
-                    {c.label}
+                    {t(`category.${c.id}` as MessageKey)}
                   </SelectItem>
                 ))}
               </SelectContent>
             </Select>
             {aiCat && (
               <p className="text-xs text-muted-foreground">
-                AI suggested {categoryLabel(aiCat)}
-                {aiConf ? ` · ${aiConf}%` : ""}. You can override.
+                {t("meta.aiSuggested", {
+                  label: t(`category.${aiCat}` as MessageKey),
+                  confidence: aiConf ? ` · ${aiConf}%` : "",
+                })}
               </p>
             )}
           </div>
 
           <div className="space-y-2">
-            <Label>Owner</Label>
+            <Label>{t("meta.owner")}</Label>
             <Select value={ownerId} onValueChange={setOwnerId}>
               <SelectTrigger>
-                <SelectValue placeholder="Unassigned" />
+                <SelectValue placeholder={t("common.unassigned")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={NONE}>Unassigned</SelectItem>
+                <SelectItem value={NONE}>{t("common.unassigned")}</SelectItem>
                 {(members.data ?? []).map((m) => (
                   <SelectItem key={m.id} value={m.id}>
                     {m.name}
@@ -170,7 +174,7 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="review-due">Review by</Label>
+            <Label htmlFor="review-due">{t("meta.reviewBy")}</Label>
             <Input
               id="review-due"
               type="date"
@@ -181,10 +185,10 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
 
           <div className="flex gap-2 pt-2">
             <Button disabled={busy || doc.isLoading} onClick={handleSave}>
-              Save
+              {t("common.save")}
             </Button>
             <Button variant="ghost" disabled={busy} onClick={() => onOpenChange(false)}>
-              Cancel
+              {t("common.cancel")}
             </Button>
           </div>
         </div>

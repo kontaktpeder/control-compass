@@ -8,6 +8,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { toast } from "sonner";
 import { Check, X, Sparkles, FileText, ExternalLink, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/components/locale-provider";
 
 export type Candidate = { label: string; confidence: number };
 
@@ -42,6 +43,7 @@ type Props = {
 };
 
 export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
+  const { t } = useT();
   const qc = useQueryClient();
   const confirmFn = useServerFn(confirmAssignment);
   const rejectFn = useServerFn(rejectAssignment);
@@ -83,7 +85,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
           purpose: purposeValue,
         },
       });
-      toast.success("Verified");
+      toast.success(t("review.verified"));
       await runAfterChange();
       onOpenChange(false);
     } catch (e) {
@@ -97,7 +99,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
     setBusy(true);
     try {
       await rejectFn({ data: { assignment_id: assignment.assignment_id } });
-      toast.info("Reset to needs review");
+      toast.info(t("review.reset"));
       await runAfterChange();
       onOpenChange(false);
     } catch (e) {
@@ -124,13 +126,12 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="w-full overflow-y-auto sm:max-w-lg">
         <SheetHeader>
-          <p className="eyebrow">Review document</p>
+          <p className="eyebrow">{t("review.eyebrow")}</p>
           <SheetTitle className="mt-1 text-xl">
-            Confirm what this document is
+            {t("review.title")}
           </SheetTitle>
           <SheetDescription>
-            Assigned to <span className="font-medium text-foreground">{assignment.obligation_title}</span>.
-            Confirm the AI's suggestion, edit it, or reject it.
+            {t("review.assignedTo", { title: assignment.obligation_title })}
           </SheetDescription>
         </SheetHeader>
 
@@ -149,12 +150,12 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
           {!editing ? (
             <div className="space-y-4">
               <ReviewField
-                label="Document type"
+                label={t("review.documentType")}
                 value={suggestedDoc}
                 confidence={assignment.document_type ? null : docConf}
               />
               <ReviewField
-                label="Purpose"
+                label={t("review.purpose")}
                 value={suggestedPurpose}
                 confidence={assignment.purpose ? null : purConf}
               />
@@ -162,13 +163,13 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
           ) : (
             <div className="space-y-4">
               <EditCandidate
-                title="Document type"
+                title={t("review.documentType")}
                 value={docType}
                 candidates={docCandidates}
                 onChange={setDocType}
               />
               <EditCandidate
-                title="Purpose"
+                title={t("review.purpose")}
                 value={purpose}
                 candidates={purCandidates}
                 onChange={setPurpose}
@@ -180,7 +181,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
             <div className="rounded-md border border-border/70 bg-muted/30 p-3">
               <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
                 <Sparkles className="h-3 w-3 text-primary" />
-                AI reasoning
+                {t("review.aiReasoning")}
               </p>
               {assignment.ai_summary && (
                 <p className="mt-2 text-sm text-muted-foreground">{assignment.ai_summary}</p>
@@ -201,11 +202,11 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
                   onClick={() => handleConfirm(suggestedDoc!, suggestedPurpose!)}
                 >
                   <Check className="mr-1 h-4 w-4" />
-                  Confirm & verify
+                  {t("review.confirm")}
                 </Button>
                 <Button variant="outline" disabled={busy} onClick={() => setEditing(true)}>
                   <Pencil className="mr-1 h-4 w-4" />
-                  Edit
+                  {t("common.edit")}
                 </Button>
                 {assignment.status === "verified" ? null : (
                   <Button
@@ -215,7 +216,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
                     className="text-muted-foreground"
                   >
                     <X className="mr-1 h-4 w-4" />
-                    Reject suggestion
+                    {t("review.reject")}
                   </Button>
                 )}
               </>
@@ -226,10 +227,10 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
                   onClick={() => handleConfirm(docType.trim(), purpose.trim())}
                 >
                   <Check className="mr-1 h-4 w-4" />
-                  Save & verify
+                  {t("review.saveVerify")}
                 </Button>
                 <Button variant="ghost" disabled={busy} onClick={() => setEditing(false)}>
-                  Cancel
+                  {t("common.cancel")}
                 </Button>
               </>
             )}

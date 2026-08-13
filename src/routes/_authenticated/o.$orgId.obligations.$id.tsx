@@ -8,6 +8,7 @@ import { StatusPill, ConfidenceBadge, type Status } from "@/components/status";
 import { assessObligation } from "@/lib/ai.functions";
 import { toast } from "sonner";
 import { ArrowLeft, Sparkles, FileText } from "lucide-react";
+import { useT } from "@/components/locale-provider";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/$id")({
   component: ObligationDetail,
@@ -15,6 +16,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/$id")
 
 function ObligationDetail() {
   const { orgId, id } = useParams({ from: "/_authenticated/o/$orgId/obligations/$id" });
+  const { t, dateLocale } = useT();
   const qc = useQueryClient();
   const assess = useServerFn(assessObligation);
 
@@ -38,7 +40,7 @@ function ObligationDetail() {
   const assessMut = useMutation({
     mutationFn: () => assess({ data: { obligation_id: id } }),
     onSuccess: async () => {
-      toast.success("Assessment updated");
+      toast.success(t("obligations.assessed"));
       await qc.invalidateQueries({ queryKey: ["obligation", id] });
       await qc.invalidateQueries({ queryKey: ["dashboard", orgId] });
     },
@@ -52,16 +54,16 @@ function ObligationDetail() {
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
       <Link to="/o/$orgId/obligations" params={{ orgId }} className="mb-6 inline-flex items-center gap-1 text-sm text-muted-foreground hover:underline">
-        <ArrowLeft className="h-3.5 w-3.5" /> All obligations
+        <ArrowLeft className="h-3.5 w-3.5" /> {t("obligations.all")}
       </Link>
 
       <div className="flex items-start justify-between gap-6">
         <div>
-          <p className="eyebrow">{data.data?.fw?.name ?? "Obligation"}</p>
+          <p className="eyebrow">{data.data?.fw?.name ?? t("obligations.eyebrow")}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">{ob?.title}</h1>
           {data.data?.src && (
             <p className="mt-2 text-sm text-muted-foreground">
-              Source: {data.data.src.authority}{data.data.src.reference ? ` · ${data.data.src.reference}` : ""}
+              {t("obligations.source")} {data.data.src.authority}{data.data.src.reference ? ` · ${data.data.src.reference}` : ""}
             </p>
           )}
         </div>
@@ -73,13 +75,13 @@ function ObligationDetail() {
 
       <Card className="mt-8">
         <CardHeader>
-          <CardTitle className="text-base">Why this obligation exists</CardTitle>
+          <CardTitle className="text-base">{t("obligations.why")}</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground">{ob?.why ?? "—"}</p>
           {ob?.evidence_requirements && ob.evidence_requirements.length > 0 && (
             <div className="mt-4">
-              <p className="eyebrow mb-2">Required evidence</p>
+              <p className="eyebrow mb-2">{t("obligations.requiredEvidence")}</p>
               <ul className="list-inside list-disc space-y-1 text-sm text-muted-foreground">
                 {ob.evidence_requirements.map((r: string, i: number) => <li key={i}>{r}</li>)}
               </ul>
@@ -92,12 +94,12 @@ function ObligationDetail() {
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-base">Assessment</CardTitle>
-              <CardDescription>AI's honest read of the evidence available. Confidence is not compliance.</CardDescription>
+              <CardTitle className="text-base">{t("obligations.assessment")}</CardTitle>
+              <CardDescription>{t("obligations.assessmentHint")}</CardDescription>
             </div>
             <Button variant="outline" size="sm" onClick={() => assessMut.mutate()} disabled={assessMut.isPending}>
               <Sparkles className="mr-2 h-4 w-4" />
-              {assessMut.isPending ? "Assessing…" : "Re-assess"}
+              {assessMut.isPending ? t("obligations.assessing") : t("obligations.reassess")}
             </Button>
           </div>
         </CardHeader>
@@ -107,24 +109,24 @@ function ObligationDetail() {
               <p className="text-muted-foreground">{latest.reasoning}</p>
               {latest.missing_evidence && latest.missing_evidence.length > 0 && (
                 <div>
-                  <p className="eyebrow mb-2">Still missing</p>
+                  <p className="eyebrow mb-2">{t("obligations.stillMissing")}</p>
                   <ul className="list-inside list-disc space-y-1 text-muted-foreground">
                     {latest.missing_evidence.map((m: string, i: number) => <li key={i}>{m}</li>)}
                   </ul>
                 </div>
               )}
-              <p className="text-xs text-muted-foreground">Last run: {new Date(latest.created_at).toLocaleString()}</p>
+              <p className="text-xs text-muted-foreground">{t("obligations.lastRun", { when: new Date(latest.created_at).toLocaleString(dateLocale) })}</p>
             </div>
           ) : (
-            <p className="text-sm text-muted-foreground">No assessment yet. Upload evidence or click <em>Re-assess</em>.</p>
+            <p className="text-sm text-muted-foreground">{t("obligations.noAssessment")}</p>
           )}
         </CardContent>
       </Card>
 
       <Card className="mt-6">
         <CardHeader>
-          <CardTitle className="text-base">Linked evidence</CardTitle>
-          <CardDescription>Documents the AI has connected to this obligation.</CardDescription>
+          <CardTitle className="text-base">{t("obligations.linkedEvidence")}</CardTitle>
+          <CardDescription>{t("obligations.linkedHint")}</CardDescription>
         </CardHeader>
         <CardContent>
           {data.data?.links.length ? (
@@ -148,7 +150,7 @@ function ObligationDetail() {
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">
-              No evidence linked yet. <Link to="/o/$orgId/evidence" params={{ orgId }} className="text-primary hover:underline">Upload one →</Link>
+              {t("obligations.noEvidence")} <Link to="/o/$orgId/evidence" params={{ orgId }} className="text-primary hover:underline">{t("obligations.uploadOne")}</Link>
             </p>
           )}
         </CardContent>

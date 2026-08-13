@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Upload, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useT } from "@/components/locale-provider";
 
 type Props = {
   orgId: string;
@@ -37,6 +38,7 @@ export function DocumentUpload({
   className,
 }: Props) {
   const qc = useQueryClient();
+  const { t } = useT();
   const classify = useServerFn(classifyEvidence);
   const replaceEv = useServerFn(replaceAssignmentEvidence);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -76,7 +78,7 @@ export function DocumentUpload({
         });
       }
 
-      toast.info("Understanding document…");
+      toast.info(t("upload.understanding"));
       await classify({
         data: {
           evidence_id: row.id,
@@ -86,7 +88,7 @@ export function DocumentUpload({
       });
 
       toast.success(
-        mode === "replace" ? "Document replaced — review the new one" : "Document uploaded"
+        mode === "replace" ? t("upload.replaced") : t("upload.uploaded")
       );
 
       await qc.invalidateQueries();
@@ -125,8 +127,8 @@ export function DocumentUpload({
           <Upload className="mr-2 h-4 w-4" />
         )}
         {uploading
-          ? "Working…"
-          : label ?? (mode === "replace" ? "Replace document" : "Upload document")}
+          ? t("common.working")
+          : label ?? (mode === "replace" ? t("upload.replaceCta") : t("library.uploadCta"))}
       </Button>
     </div>
   );

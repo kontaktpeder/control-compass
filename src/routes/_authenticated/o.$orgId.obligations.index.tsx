@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { StatusPill, type Status } from "@/components/status";
 import { Input } from "@/components/ui/input";
 import { useState } from "react";
+import { useT } from "@/components/locale-provider";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/")({
   component: ObligationsList,
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/")({
 function ObligationsList() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/obligations/" });
   const [q, setQ] = useState("");
+  const { t } = useT();
 
   const data = useQuery({
     queryKey: ["obligations", orgId],
@@ -34,23 +36,23 @@ function ObligationsList() {
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-10">
-      <p className="eyebrow">Obligations</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Every duty, every source</h1>
+      <p className="eyebrow">{t("obligations.eyebrow")}</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t("obligations.title")}</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        Every obligation explains where it comes from and what evidence it needs.
+        {t("obligations.lede")}
       </p>
 
       <div className="mt-6 mb-4 max-w-sm">
-        <Input placeholder="Search obligations…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input placeholder={t("obligations.search")} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
       <div className="overflow-hidden rounded-lg border border-border bg-card">
         <table className="w-full text-sm">
           <thead className="bg-muted/50 text-left text-xs uppercase text-muted-foreground">
             <tr>
-              <th className="px-4 py-3 font-medium">Obligation</th>
-              <th className="px-4 py-3 font-medium">Framework</th>
-              <th className="px-4 py-3 font-medium">Status</th>
+              <th className="px-4 py-3 font-medium">{t("obligations.col.obligation")}</th>
+              <th className="px-4 py-3 font-medium">{t("obligations.col.framework")}</th>
+              <th className="px-4 py-3 font-medium">{t("obligations.col.status")}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
@@ -66,7 +68,7 @@ function ObligationsList() {
               </tr>
             ))}
             {items.length === 0 && (
-              <tr><td colSpan={3} className="px-4 py-10 text-center text-muted-foreground">No obligations.</td></tr>
+              <tr><td colSpan={3} className="px-4 py-10 text-center text-muted-foreground">{t("obligations.empty")}</td></tr>
             )}
           </tbody>
         </table>

@@ -8,6 +8,8 @@ import { PlatformLinkingCard } from "@/components/PlatformLinkingCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { createApiKey, listApiClients, revokeApiClient } from "@/lib/api-keys.functions";
+import { useT } from "@/components/locale-provider";
+import { LanguageToggle } from "@/components/language-toggle";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/settings")({
   component: OrgSettingsPage,
@@ -24,6 +26,7 @@ type ApiClientRow = {
 
 function OrgSettingsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/settings" });
+  const { t } = useT();
   const queryClient = useQueryClient();
   const listClients = useServerFn(listApiClients);
   const createKey = useServerFn(createApiKey);
@@ -49,72 +52,81 @@ function OrgSettingsPage() {
         },
       });
       setIssuedToken(res.token);
-      toast.success("API key created");
+      toast.success(t("settings.keyCreated"));
       await queryClient.invalidateQueries({ queryKey: ["api-clients", orgId] });
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not create key");
+      toast.error(e instanceof Error ? e.message : t("settings.createFailed"));
     } finally {
       setBusy(false);
     }
   }
 
   async function onRevoke(clientId: string) {
-    if (!confirm("Revoke this API key? Nexus will stop connecting until you create a new one.")) {
+    if (!confirm(t("settings.revokeConfirm"))) {
       return;
     }
     try {
       await revokeClient({ data: { organizationId: orgId, clientId } });
-      toast.success("Key revoked");
+      toast.success(t("settings.keyRevoked"));
       await queryClient.invalidateQueries({ queryKey: ["api-clients", orgId] });
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not revoke key");
+      toast.error(e instanceof Error ? e.message : t("settings.revokeFailed"));
     }
   }
 
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div>
-        <p className="eyebrow">Organization</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <p className="eyebrow">{t("settings.eyebrow")}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("settings.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Connect Control to Nexus and manage API keys.
+          {t("settings.lede")}
         </p>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">{t("settings.languageTitle")}</CardTitle>
+          <CardDescription>{t("settings.languageHint")}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <LanguageToggle />
+        </CardContent>
+      </Card>
 
       <PlatformLinkingCard orgId={orgId} />
 
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4 space-y-0">
           <div>
-            <CardTitle className="text-base">API keys</CardTitle>
+            <CardTitle className="text-base">{t("settings.apiKeys")}</CardTitle>
             <CardDescription>
-              Keys use the <code className="font-mono text-xs">cc_live_</code> prefix. Raw tokens
-              are shown only when created.
+              {t("settings.apiHint")}
             </CardDescription>
           </div>
           <Button type="button" size="sm" onClick={() => void onCreateKey()} disabled={busy}>
             <KeyRound className="mr-2 h-4 w-4" />
-            {busy ? "Creating…" : "New platform key"}
+            {busy ? t("common.creating") : t("settings.newKey")}
           </Button>
         </CardHeader>
         <CardContent className="space-y-4">
           {issuedToken && (
             <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
-              <p className="text-xs text-muted-foreground">Copy now — shown once.</p>
+              <p className="text-xs text-muted-foreground">{t("settings.copyOnce")}</p>
               <div className="break-all font-mono text-xs">{issuedToken}</div>
             </div>
           )}
 
-          {clients.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+          {clients.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
           {clients.isError && (
             <p className="text-sm text-destructive">
-              {clients.error instanceof Error ? clients.error.message : "Failed to load keys"}
+              {clients.error instanceof Error ? clients.error.message : t("settings.loadFailed")}
             </p>
           )}
 
           <ul className="divide-y divide-border rounded-md border border-border">
             {(clients.data ?? []).length === 0 && !clients.isLoading && (
-              <li className="px-3 py-4 text-sm text-muted-foreground">No API keys yet.</li>
+              <li className="px-3 py-4 text-sm text-muted-foreground">{t("settings.noKeys")}</li>
             )}
             {(clients.data ?? []).map((c) => (
               <li key={c.id} className="flex items-center justify-between gap-3 px-3 py-3">
@@ -123,7 +135,7 @@ function OrgSettingsPage() {
                     {c.name}
                     {c.revoked_at && (
                       <span className="ml-2 text-xs font-normal text-muted-foreground">
-                        (revoked)
+                        {t("settings.revoked")}
                       </span>
                     )}
                   </p>
@@ -137,7 +149,7 @@ function OrgSettingsPage() {
                     variant="ghost"
                     size="icon"
                     onClick={() => void onRevoke(c.id)}
-                    aria-label="Revoke key"
+                    aria-label={t("settings.revoke")}
                   >
                     <Trash2 className="h-4 w-4" />
                   </Button>

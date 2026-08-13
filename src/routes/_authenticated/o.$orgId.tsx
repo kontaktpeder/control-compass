@@ -12,6 +12,9 @@ import {
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { LanguageToggle } from "@/components/language-toggle";
+import { useT } from "@/components/locale-provider";
+import type { MessageKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId")({
   component: OrgShell,
@@ -20,6 +23,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgId")({
 function OrgShell() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId" });
   const navigate = useNavigate();
+  const { t } = useT();
 
   const org = useQuery({
     queryKey: ["org", orgId],
@@ -34,11 +38,11 @@ function OrgShell() {
     },
   });
 
-  const navItems: Array<{ to: string; label: string; icon: typeof ClipboardList; end?: boolean }> = [
-    { to: "/o/$orgId/workflows", label: "Register Company", icon: ClipboardList },
-    { to: "/o/$orgId/evidence", label: "Documents", icon: FileText },
-    { to: "/o/$orgId/agreements", label: "Agreements", icon: FileSignature },
-    { to: "/o/$orgId/settings", label: "Settings", icon: Settings },
+  const navItems: Array<{ to: string; labelKey: MessageKey; icon: typeof ClipboardList; end?: boolean }> = [
+    { to: "/o/$orgId/workflows", labelKey: "nav.registerCompany", icon: ClipboardList },
+    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText },
+    { to: "/o/$orgId/agreements", labelKey: "nav.agreements", icon: FileSignature },
+    { to: "/o/$orgId/settings", labelKey: "nav.settings", icon: Settings },
   ];
 
   return (
@@ -52,12 +56,12 @@ function OrgShell() {
             </Link>
           </div>
           <div className="border-b border-sidebar-border p-4">
-            <p className="eyebrow">Organization</p>
+            <p className="eyebrow">{t("common.organization")}</p>
             <div className="mt-2 flex items-center gap-2">
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{org.data?.name ?? "…"}</p>
-                <Link to="/orgs" className="text-xs text-muted-foreground hover:underline">Switch</Link>
+                <Link to="/orgs" className="text-xs text-muted-foreground hover:underline">{t("common.switch")}</Link>
               </div>
             </div>
           </div>
@@ -72,11 +76,12 @@ function OrgShell() {
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition hover:bg-sidebar-accent/60"
               >
                 <item.icon className="h-4 w-4" />
-                {item.label}
+                {t(item.labelKey)}
               </Link>
             ))}
           </nav>
-          <div className="border-t border-sidebar-border p-3">
+          <div className="border-t border-sidebar-border p-3 space-y-2">
+            <LanguageToggle className="w-full justify-center" />
             <Button
               variant="ghost"
               size="sm"
@@ -86,7 +91,7 @@ function OrgShell() {
                 navigate({ to: "/auth" });
               }}
             >
-              <LogOut className="mr-2 h-4 w-4" /> Sign out
+              <LogOut className="mr-2 h-4 w-4" /> {t("common.signOut")}
             </Button>
           </div>
         </aside>
@@ -105,7 +110,7 @@ function OrgShell() {
                   activeProps={{ className: "bg-muted font-medium text-foreground" }}
                   className="shrink-0 rounded-md px-2 py-1.5 text-muted-foreground"
                 >
-                  {item.label}
+                  {t(item.labelKey)}
                 </Link>
               ))}
             </nav>

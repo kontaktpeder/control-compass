@@ -2,6 +2,8 @@ import { createFileRoute, Link, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import { FileSignature } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useT } from "@/components/locale-provider";
+import type { MessageKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/agreements/")({
   component: AgreementsPage,
@@ -21,6 +23,7 @@ type AgreementListRow = {
 function AgreementsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/agreements/" });
 
+  const { t } = useT();
   const list = useQuery({
     queryKey: ["agreements", orgId],
     queryFn: async () => {
@@ -39,18 +42,17 @@ function AgreementsPage() {
   return (
     <div className="mx-auto max-w-3xl space-y-6 p-6">
       <div>
-        <p className="eyebrow">Control</p>
-        <h1 className="text-2xl font-semibold tracking-tight">Agreements</h1>
+        <p className="eyebrow">{t("agreements.eyebrow")}</p>
+        <h1 className="text-2xl font-semibold tracking-tight">{t("agreements.title")}</h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          Control owns drafts, signing, versions and archive. Fortell can hand off
-          drafts from Nexus — it is not the contract system.
+          {t("agreements.lede")}
         </p>
       </div>
 
-      {list.isLoading && <p className="text-sm text-muted-foreground">Loading…</p>}
+      {list.isLoading && <p className="text-sm text-muted-foreground">{t("common.loading")}</p>}
       {list.isError && (
         <p className="text-sm text-destructive">
-          {list.error instanceof Error ? list.error.message : "Failed to load"}
+          {list.error instanceof Error ? list.error.message : t("common.failedLoad")}
         </p>
       )}
 
@@ -59,10 +61,9 @@ function AgreementsPage() {
           <li className="flex items-start gap-3 px-4 py-8 text-sm text-muted-foreground">
             <FileSignature className="mt-0.5 h-4 w-4 shrink-0" />
             <div>
-              <p className="font-medium text-foreground">No agreements yet</p>
+              <p className="font-medium text-foreground">{t("agreements.emptyTitle")}</p>
               <p className="mt-1">
-                Ask Fortell in Nexus to prepare a contract draft, then confirm the
-                handoff — it lands here as <code className="text-xs">draft</code>.
+                {t("agreements.emptyBody")}
               </p>
             </div>
           </li>
@@ -77,13 +78,13 @@ function AgreementsPage() {
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{a.title}</p>
                 <p className="truncate text-xs text-muted-foreground">
-                  {a.agreement_type}
+                  {t(`agreements.type.${a.agreement_type}` as MessageKey)}
                   {a.counterparty_name ? ` · ${a.counterparty_name}` : ""}
-                  {a.source === "nexus_fortell" ? " · from Fortell" : ""}
+                  {a.source === "nexus_fortell" ? ` · ${t("agreements.fromFortell")}` : ""}
                 </p>
               </div>
               <div className="shrink-0 text-right">
-                <p className="text-xs font-medium capitalize">{a.status}</p>
+                <p className="text-xs font-medium capitalize">{t(`agreements.status.${a.status}` as MessageKey)}</p>
                 <p className="text-[11px] text-muted-foreground">v{a.version}</p>
               </div>
             </Link>

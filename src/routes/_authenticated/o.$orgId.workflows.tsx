@@ -8,6 +8,7 @@ import { DocumentUpload } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { toast } from "sonner";
 import { FileText, ChevronRight, ExternalLink, ExternalLink as LinkIcon } from "lucide-react";
+import { useT } from "@/components/locale-provider";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/workflows")({
   component: RegisterCompanyPage,
@@ -77,6 +78,7 @@ function lifecycleFor(a: Assignment | undefined): DocLifecycle {
 
 function RegisterCompanyPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/workflows" });
+  const { t } = useT();
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
 
   const data = useQuery({
@@ -116,35 +118,34 @@ function RegisterCompanyPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <p className="eyebrow">Workspace</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">Register Company</h1>
+      <p className="eyebrow">{t("workflow.eyebrow")}</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t("workflow.title")}</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        Every document folder your company needs to be in control. Upload a document, review the AI's
-        suggestion, and confirm. A folder turns green once you've verified it.
+        {t("workflow.lede")}
       </p>
 
       <div className="mt-6 flex flex-wrap gap-6 text-sm">
         <span className="text-muted-foreground">
-          <span className="font-medium text-foreground">{onFile}</span> / {required.length} required on file
+          {t("workflow.requiredOnFile", { onFile, total: required.length })}
         </span>
         {needsReview > 0 && (
           <span className="text-status-partial">
-            <span className="font-medium">{needsReview}</span> awaiting your review
+            {t("workflow.awaitingReview", { count: needsReview })}
           </span>
         )}
       </div>
 
       <Section
-        title="Required documents"
-        subtitle="Legally required to incorporate and run the company."
+        title={t("workflow.requiredTitle")}
+        subtitle={t("workflow.requiredSubtitle")}
         orgId={orgId}
         obligations={required}
         byOb={byOb}
         onReview={setReviewing}
       />
       <Section
-        title="Company documents"
-        subtitle="Recommended internal agreements. Not required by law, but good practice."
+        title={t("workflow.companyTitle")}
+        subtitle={t("workflow.companySubtitle")}
         orgId={orgId}
         obligations={company}
         byOb={byOb}
@@ -177,6 +178,7 @@ function Section({
   byOb: Map<string, Assignment>;
   onReview: (a: ReviewAssignment) => void;
 }) {
+  const { t } = useT();
   if (obligations.length === 0) return null;
   return (
     <section className="mt-10">
@@ -213,7 +215,7 @@ function Section({
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted-foreground">
                     {o.responsible && (
                       <span>
-                        <span className="font-medium text-foreground/70">Responsible:</span> {o.responsible}
+                        <span className="font-medium text-foreground/70">{t("workflow.responsible")}</span> {o.responsible}
                       </span>
                     )}
                     {o.source?.url && (
@@ -224,7 +226,7 @@ function Section({
                         className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
                       >
                         <LinkIcon className="h-3 w-3" />
-                        {o.source.authority ?? "Source"}
+                        {o.source.authority ?? t("workflow.source")}
                       </a>
                     )}
                   </div>
@@ -236,7 +238,7 @@ function Section({
                       {displayType && <span className="text-muted-foreground/70">· {displayType}</span>}
                     </div>
                   ) : (
-                    <p className="mt-3 text-xs italic text-muted-foreground">No document yet.</p>
+                    <p className="mt-3 text-xs italic text-muted-foreground">{t("workflow.noDocument")}</p>
                   )}
                 </div>
 
@@ -248,12 +250,12 @@ function Section({
                       context="workflow"
                       size="sm"
                       variant="default"
-                      label="Upload"
+                      label={t("common.upload")}
                     />
                   )}
                   {lifecycle === "needs_review" && assignment && (
                     <Button size="sm" onClick={openReview}>
-                      Review now
+                      {t("workflow.reviewNow")}
                     </Button>
                   )}
                   {lifecycle === "on_file" && ev && assignment && (
@@ -266,14 +268,14 @@ function Section({
                             .from("evidence")
                             .createSignedUrl(ev.file_path, 60);
                           if (error || !data?.signedUrl) {
-                            toast.error(error?.message ?? "Could not open file");
+                            toast.error(error?.message ?? t("workflow.openFailed"));
                             return;
                           }
                           window.open(data.signedUrl, "_blank", "noopener,noreferrer");
                         }}
                       >
                         <ExternalLink className="mr-1 h-3 w-3" />
-                        View
+                        {t("common.view")}
                       </Button>
                       <DocumentUpload
                         orgId={orgId}
@@ -283,7 +285,7 @@ function Section({
                         assignmentId={assignment.id}
                         size="sm"
                         variant="ghost"
-                        label="Replace"
+                        label={t("common.replace")}
                       />
                     </>
                   )}
@@ -292,7 +294,7 @@ function Section({
                     params={{ orgId, id: o.id }}
                     className="inline-flex items-center gap-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:underline"
                   >
-                    Details <ChevronRight className="h-3 w-3" />
+                    {t("workflow.details")} <ChevronRight className="h-3 w-3" />
                   </Link>
                 </div>
               </div>

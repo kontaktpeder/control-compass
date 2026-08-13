@@ -5,6 +5,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Check, X } from "lucide-react";
 import { toast } from "sonner";
+import { useT } from "@/components/locale-provider";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/tasks")({
   component: TasksPage,
@@ -12,6 +13,7 @@ export const Route = createFileRoute("/_authenticated/o/$orgId/tasks")({
 
 function TasksPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/tasks" });
+  const { t } = useT();
   const qc = useQueryClient();
 
   const tasks = useQuery({
@@ -44,14 +46,14 @@ function TasksPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <p className="eyebrow">Tasks</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">What to do next</h1>
+      <p className="eyebrow">{t("tasks.eyebrow")}</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t("tasks.title")}</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        Tasks are generated from obligations that aren't yet satisfied. Complete an obligation and its task closes itself.
+        {t("tasks.lede")}
       </p>
 
       <section className="mt-8">
-        <h2 className="mb-3 text-lg font-semibold">Open ({open.length})</h2>
+        <h2 className="mb-3 text-lg font-semibold">{t("tasks.open", { count: open.length })}</h2>
         {open.length ? (
           <ul className="space-y-2">
             {open.map((t) => (
@@ -67,13 +69,13 @@ function TasksPage() {
                           params={{ orgId, id: t.obligation_id }}
                           className="mt-2 inline-block text-xs text-primary hover:underline"
                         >
-                          View obligation
+                          {t("tasks.viewObligation")}
                         </Link>
                       )}
                     </div>
                     <div className="flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => setStatus.mutate({ id: t.id, status: "done" })}>
-                        <Check className="mr-1 h-3.5 w-3.5" /> Done
+                        <Check className="mr-1 h-3.5 w-3.5" /> {t("tasks.done")}
                       </Button>
                       <Button size="sm" variant="ghost" onClick={() => setStatus.mutate({ id: t.id, status: "dismissed" })}>
                         <X className="h-3.5 w-3.5" />
@@ -86,14 +88,14 @@ function TasksPage() {
           </ul>
         ) : (
           <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            No open tasks.
+            {t("tasks.empty")}
           </p>
         )}
       </section>
 
       {done.length > 0 && (
         <section className="mt-10">
-          <h2 className="mb-3 text-lg font-semibold text-muted-foreground">Closed</h2>
+          <h2 className="mb-3 text-lg font-semibold text-muted-foreground">{t("tasks.closed")}</h2>
           <ul className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-card">
             {done.map((t) => (
               <li key={t.id} className="flex items-center justify-between px-4 py-2 text-sm text-muted-foreground">

@@ -17,21 +17,23 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import { supabase } from "@/integrations/supabase/client";
 import { Toaster } from "@/components/ui/sonner";
+import { LocaleProvider, useT } from "@/components/locale-provider";
 
 function NotFoundComponent() {
+  const { t } = useT();
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
         <p className="eyebrow">404</p>
-        <h1 className="mt-3 text-2xl font-semibold text-foreground">Page not found</h1>
+        <h1 className="mt-3 text-2xl font-semibold text-foreground">{t("error.notFoundTitle")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          The page you're looking for doesn't exist.
+          {t("error.notFoundBody")}
         </p>
         <Link
           to="/"
           className="mt-6 inline-flex items-center justify-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground transition-colors hover:opacity-90"
         >
-          Go home
+          {t("common.goHome")}
         </Link>
       </div>
     </div>
@@ -39,6 +41,7 @@ function NotFoundComponent() {
 }
 
 function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
+  const { t } = useT();
   console.error(error);
   const router = useRouter();
   useEffect(() => {
@@ -47,20 +50,20 @@ function ErrorComponent({ error, reset }: { error: Error; reset: () => void }) {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
       <div className="max-w-md text-center">
-        <p className="eyebrow">Something went wrong</p>
-        <h1 className="mt-3 text-xl font-semibold">This page didn't load</h1>
+        <p className="eyebrow">{t("error.genericEyebrow")}</p>
+        <h1 className="mt-3 text-xl font-semibold">{t("error.genericTitle")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          {error?.message ?? "An unexpected error occurred."}
+          {error?.message ?? t("error.genericBody")}
         </p>
         <div className="mt-6 flex justify-center gap-2">
           <button
             onClick={() => { router.invalidate(); reset(); }}
             className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
           >
-            Try again
+            {t("common.tryAgain")}
           </button>
           <Link to="/" className="rounded-md border border-input bg-background px-4 py-2 text-sm hover:bg-accent">
-            Go home
+            {t("common.goHome")}
           </Link>
         </div>
       </div>
@@ -96,11 +99,13 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
 
 function RootShell({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
+    <html lang="nb">
       <head><HeadContent /></head>
       <body>
-        {children}
-        <Scripts />
+        <LocaleProvider>
+          {children}
+          <Scripts />
+        </LocaleProvider>
       </body>
     </html>
   );

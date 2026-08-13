@@ -12,11 +12,12 @@ import { FileText, Sparkles, Link2, ExternalLink, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   DOCUMENT_CATEGORIES,
-  categoryLabel,
   isOverdue,
   type DocumentCategory,
   type LibraryItem,
 } from "@/lib/library";
+import { useT } from "@/components/locale-provider";
+import type { MessageKey } from "@/lib/i18n";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
   component: DocumentsPage,
@@ -44,6 +45,7 @@ type ChipFilter = "mine" | "needs_review" | "overdue" | "linked";
 
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
+  const { t, dateLocale } = useT();
   const [tab, setTab] = useState<CategoryTab>("all");
   const [chips, setChips] = useState<ChipFilter[]>([]);
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
@@ -164,19 +166,19 @@ function DocumentsPage() {
   }, [documents.data, tab, chips, me.data]);
 
   const tabs: Array<{ id: CategoryTab; label: string }> = [
-    { id: "all", label: `All · ${tabCounts.all}` },
+    { id: "all", label: `${t("category.all")} · ${tabCounts.all}` },
     ...DOCUMENT_CATEGORIES.map((c) => ({
       id: c.id as CategoryTab,
-      label: `${c.label} · ${tabCounts[c.id]}`,
+      label: `${t(`category.${c.id}` as MessageKey)} · ${tabCounts[c.id]}`,
     })),
-    { id: "uncategorized", label: `Uncategorized · ${tabCounts.uncategorized}` },
+    { id: "uncategorized", label: `${t("category.uncategorized")} · ${tabCounts.uncategorized}` },
   ];
 
   const chipDefs: Array<{ id: ChipFilter; label: string }> = [
-    { id: "mine", label: `Mine · ${chipCounts.mine}` },
-    { id: "needs_review", label: `Needs review · ${chipCounts.needs_review}` },
-    { id: "overdue", label: `Overdue · ${chipCounts.overdue}` },
-    { id: "linked", label: `Linked to a requirement · ${chipCounts.linked}` },
+    { id: "mine", label: `${t("library.chip.mine")} · ${chipCounts.mine}` },
+    { id: "needs_review", label: `${t("library.chip.needs_review")} · ${chipCounts.needs_review}` },
+    { id: "overdue", label: `${t("library.chip.overdue")} · ${chipCounts.overdue}` },
+    { id: "linked", label: `${t("library.chip.linked")} · ${chipCounts.linked}` },
   ];
 
   const toggleChip = (id: ChipFilter) => {
@@ -210,7 +212,7 @@ function DocumentsPage() {
   const openFile = async (path: string) => {
     const { data, error } = await supabase.storage.from("evidence").createSignedUrl(path, 60);
     if (error || !data?.signedUrl) {
-      toast.error(error?.message ?? "Could not open file");
+      toast.error(error?.message ?? t("library.openFailed"));
       return;
     }
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
@@ -218,24 +220,24 @@ function DocumentsPage() {
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
-      <p className="eyebrow">Documents</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">The library</h1>
+      <p className="eyebrow">{t("library.eyebrow")}</p>
+      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t("library.title")}</h1>
       <p className="mt-2 max-w-2xl text-muted-foreground">
-        Every file has a category and an owner. Linking to a compliance requirement is optional.
+        {t("library.lede")}
       </p>
 
       <Card className="mt-8 border-dashed">
         <CardHeader>
-          <CardTitle className="text-base">Upload to the library</CardTitle>
+          <CardTitle className="text-base">{t("library.uploadTitle")}</CardTitle>
           <CardDescription>
-            PDF or image. AI suggests a category — you can override it after upload.
+            {t("library.uploadHint")}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <DocumentUpload
             orgId={orgId}
             context="library"
-            label="Upload document"
+            label={t("library.uploadCta")}
             onAfterUpload={(id) => setEditingId(id)}
           />
         </CardContent>
@@ -293,23 +295,25 @@ function DocumentsPage() {
                         <div className="min-w-0">
                           <p className="truncate text-sm font-medium">{d.title}</p>
                           <p className="mt-0.5 text-xs text-muted-foreground">
-                            {d.ownerName ?? "Unassigned"} · {new Date(d.updatedAt).toLocaleString()}
+                            {d.ownerName ?? t("common.unassigned")} · {new Date(d.updatedAt).toLocaleString(dateLocale)}
                             {d.mimeType ? ` · ${d.mimeType}` : ""}
                             {d.sizeBytes != null ? ` · ${formatBytes(d.sizeBytes)}` : ""}
                           </p>
                         </div>
                         <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
                           <span className="rounded-full border border-border px-2 py-0.5 text-xs">
-                            {categoryLabel(d.category)}
+                            {d.category
+                              ? t(`category.${d.category}` as MessageKey)
+                              : t("category.uncategorized")}
                           </span>
                           {overdue && (
                             <span className="rounded-full bg-status-missing-bg px-2 py-0.5 text-xs font-medium text-status-missing">
-                              Overdue
+                              {t("library.chip.overdue")}
                             </span>
                           )}
                           {d.assignment?.status === "needs_review" && (
                             <span className="rounded-full bg-status-partial-bg px-2 py-0.5 text-xs font-medium text-status-partial">
-                              Needs review
+                              {t("library.chip.needs_review")}
                             </span>
                           )}
                         </div>
@@ -325,7 +329,7 @@ function DocumentsPage() {
                       {d.obligation && (
                         <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
                           <Link2 className="h-3 w-3 text-primary" />
-                          <span className="text-muted-foreground">Requirement:</span>
+                          <span className="text-muted-foreground">{t("library.requirement")}</span>
                           <Link
                             to="/o/$orgId/obligations/$id"
                             params={{ orgId, id: d.obligation.id }}
@@ -339,18 +343,18 @@ function DocumentsPage() {
                       <div className="mt-3 flex flex-wrap items-center gap-2">
                         {d.assignment?.status === "needs_review" && (
                           <Button size="sm" onClick={() => openReview(d)}>
-                            Review assignment
+                            {t("library.reviewAssignment")}
                           </Button>
                         )}
                         {d.filePath && (
                           <Button size="sm" variant="outline" onClick={() => openFile(d.filePath!)}>
                             <ExternalLink className="mr-1 h-3 w-3" />
-                            View
+                            {t("common.view")}
                           </Button>
                         )}
                         <Button size="sm" variant="ghost" onClick={() => setEditingId(d.id)}>
                           <Pencil className="mr-1 h-3 w-3" />
-                          Edit
+                          {t("common.edit")}
                         </Button>
                       </div>
                     </div>
@@ -361,7 +365,7 @@ function DocumentsPage() {
           </ul>
         ) : (
           <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            Nothing here.
+            {t("common.nothingHere")}
           </p>
         )}
       </div>

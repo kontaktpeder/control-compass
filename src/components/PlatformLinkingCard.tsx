@@ -8,17 +8,19 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { createApiKey } from "@/lib/api-keys.functions";
+import { useT } from "@/components/locale-provider";
 
-async function copyText(value: string, label: string) {
+async function copyText(value: string, label: string, copied: string, failed: string) {
   try {
     await navigator.clipboard.writeText(value);
-    toast.success(`${label} copied`);
+    toast.success(copied);
   } catch {
-    toast.error("Could not copy");
+    toast.error(failed);
   }
 }
 
 export function PlatformLinkingCard({ orgId }: { orgId: string }) {
+  const { t } = useT();
   const createKey = useServerFn(createApiKey);
   const [busy, setBusy] = useState(false);
   const [issuedToken, setIssuedToken] = useState<string | null>(null);
@@ -36,9 +38,9 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
         },
       });
       setIssuedToken(res.token);
-      toast.success("Platform handoff key created");
+      toast.success(t("platform.keyCreated"));
     } catch (e: unknown) {
-      toast.error(e instanceof Error ? e.message : "Could not create key");
+      toast.error(e instanceof Error ? e.message : t("settings.createFailed"));
     } finally {
       setBusy(false);
     }
@@ -47,24 +49,21 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="text-base">Platform linking (Nexus)</CardTitle>
+        <CardTitle className="text-base">{t("platform.title")}</CardTitle>
         <CardDescription>
-          Paste these values in Nexus → Modules when connecting Control. Key includes{" "}
-          <code className="font-mono text-xs">platform:read</code>,{" "}
-          <code className="font-mono text-xs">platform:verify</code> and agreement
-          handoff scopes so Fortell can send drafts into Control.
+          {t("platform.hint")}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="space-y-2">
-          <Label>Control org ID</Label>
+          <Label>{t("platform.orgId")}</Label>
           <div className="flex gap-2">
             <Input readOnly value={orgId} className="font-mono text-xs" />
             <Button
               type="button"
               variant="outline"
               size="icon"
-              onClick={() => void copyText(orgId, "Org ID")}
+              onClick={() => void copyText(orgId, "Org ID", t("common.copied", { label: "Org ID" }), t("common.copyFailed"))}
               aria-label="Copy org ID"
             >
               <Copy className="h-4 w-4" />
@@ -73,14 +72,14 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
         </div>
 
         <div className="space-y-2">
-          <Label>Base URL</Label>
+          <Label>{t("platform.baseUrl")}</Label>
           <div className="flex gap-2">
             <Input readOnly value={appBase} className="font-mono text-xs" />
             <Button
               type="button"
               variant="outline"
               size="icon"
-              onClick={() => void copyText(appBase, "Base URL")}
+              onClick={() => void copyText(appBase, "Base URL", t("common.copied", { label: t("platform.baseUrl") }), t("common.copyFailed"))}
               aria-label="Copy base URL"
             >
               <Copy className="h-4 w-4" />
@@ -91,11 +90,11 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
         <div className="flex flex-wrap gap-2">
           <Button type="button" onClick={() => void createPlatformVerifyKey()} disabled={busy}>
             <KeyRound className="mr-2 h-4 w-4" />
-            {busy ? "Creating…" : "Create platform handoff key"}
+            {busy ? t("common.creating") : t("platform.createKey")}
           </Button>
           <Button type="button" variant="outline" asChild>
             <Link to="/o/$orgId/settings" params={{ orgId }}>
-              API keys
+              {t("settings.apiKeys")}
             </Link>
           </Button>
         </div>
@@ -103,16 +102,16 @@ export function PlatformLinkingCard({ orgId }: { orgId: string }) {
         {issuedToken && (
           <div className="space-y-2 rounded-md border border-border bg-muted/40 p-3">
             <p className="text-xs text-muted-foreground">
-              Copy the key now — it is shown only once.
+              {t("platform.copyOnce")}
             </p>
             <div className="break-all font-mono text-xs">{issuedToken}</div>
             <Button
               type="button"
               variant="outline"
               size="sm"
-              onClick={() => void copyText(issuedToken, "API key")}
+              onClick={() => void copyText(issuedToken, "API key", t("common.copied", { label: "API key" }), t("common.copyFailed"))}
             >
-              <Copy className="mr-2 h-4 w-4" /> Copy key
+              <Copy className="mr-2 h-4 w-4" /> {t("platform.copyKey")}
             </Button>
           </div>
         )}

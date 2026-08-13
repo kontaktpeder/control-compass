@@ -10,6 +10,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { ShieldCheck } from "lucide-react";
+import { useT } from "@/components/locale-provider";
+import { LanguageToggle } from "@/components/language-toggle";
 
 function safeReturnTo(value: unknown): string | null {
   if (typeof value !== "string") return null;
@@ -42,6 +44,7 @@ function AuthPage() {
   const navigate = useNavigate();
   const { returnTo } = Route.useSearch();
   const dest = safeReturnTo(returnTo);
+  const { t } = useT();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -81,14 +84,14 @@ function AuthPage() {
     });
     setLoading(false);
     if (error) toast.error(error.message);
-    else toast.success("Account created. You're signed in.");
+    else toast.success(t("auth.accountCreated"));
   };
 
   const handleGoogle = async () => {
     const result = await lovable.auth.signInWithOAuth("google", {
       redirect_uri: window.location.origin,
     });
-    if (result.error) toast.error("Google sign-in failed. " + (result.error.message ?? ""));
+    if (result.error) toast.error(t("auth.googleFailed") + " " + (result.error.message ?? ""));
   };
 
   return (
@@ -100,31 +103,29 @@ function AuthPage() {
             Control Core
           </Link>
           <div className="max-w-md space-y-6">
-            <p className="eyebrow">Governance · Obligations · Evidence</p>
+            <p className="eyebrow">{t("auth.eyebrow")}</p>
             <h1 className="text-4xl font-semibold leading-tight tracking-tight">
-              Are we in control?
+              {t("auth.headline")}
             </h1>
             <p className="text-muted-foreground">
-              Control Core connects the laws, contracts and decisions your organization is
-              bound by with the evidence that proves you've handled them. No compliance
-              theater — just an honest picture of what's known, what's missing, and why.
+              {t("auth.lede")}
             </p>
             <div className="grid grid-cols-2 gap-4 pt-4 text-sm">
               <div className="rounded-lg border border-border bg-card p-4">
-                <p className="eyebrow mb-2">Obligations</p>
-                <p className="text-muted-foreground">Every duty explains where it comes from.</p>
+                <p className="eyebrow mb-2">{t("obligations.eyebrow")}</p>
+                <p className="text-muted-foreground">{t("auth.card.obligations")}</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
-                <p className="eyebrow mb-2">Evidence</p>
-                <p className="text-muted-foreground">Every document proves a specific obligation.</p>
+                <p className="eyebrow mb-2">{t("library.eyebrow")}</p>
+                <p className="text-muted-foreground">{t("auth.card.evidence")}</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
-                <p className="eyebrow mb-2">Assessment</p>
-                <p className="text-muted-foreground">AI states its reasoning and confidence.</p>
+                <p className="eyebrow mb-2">{t("obligations.assessment")}</p>
+                <p className="text-muted-foreground">{t("auth.card.assessment")}</p>
               </div>
               <div className="rounded-lg border border-border bg-card p-4">
-                <p className="eyebrow mb-2">Tasks</p>
-                <p className="text-muted-foreground">Only what's missing, nothing invented.</p>
+                <p className="eyebrow mb-2">{t("tasks.eyebrow")}</p>
+                <p className="text-muted-foreground">{t("auth.card.tasks")}</p>
               </div>
             </div>
           </div>
@@ -132,45 +133,49 @@ function AuthPage() {
         </div>
 
         <div className="flex flex-1 items-center justify-center p-6">
-          <Card className="w-full max-w-md">
+          <div className="w-full max-w-md space-y-3">
+            <div className="flex justify-end">
+              <LanguageToggle />
+            </div>
+          <Card className="w-full">
             <CardHeader>
-              <CardTitle>Welcome</CardTitle>
-              <CardDescription>Sign in to your workspace or create a new one.</CardDescription>
+              <CardTitle>{t("auth.welcome")}</CardTitle>
+              <CardDescription>{t("auth.welcomeHint")}</CardDescription>
             </CardHeader>
             <CardContent>
               <Tabs defaultValue="signin">
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="signin">Sign in</TabsTrigger>
-                  <TabsTrigger value="signup">Create account</TabsTrigger>
+                  <TabsTrigger value="signin">{t("auth.signIn")}</TabsTrigger>
+                  <TabsTrigger value="signup">{t("auth.createAccount")}</TabsTrigger>
                 </TabsList>
                 <TabsContent value="signin" className="mt-4 space-y-4">
                   <form onSubmit={handleSignIn} className="space-y-3">
                     <div className="space-y-1">
-                      <Label htmlFor="email">Email</Label>
+                      <Label htmlFor="email">{t("auth.email")}</Label>
                       <Input id="email" type="email" required value={email} onChange={e => setEmail(e.target.value)} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="password">Password</Label>
+                      <Label htmlFor="password">{t("auth.password")}</Label>
                       <Input id="password" type="password" required value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
-                    <Button type="submit" className="w-full" disabled={loading}>Sign in</Button>
+                    <Button type="submit" className="w-full" disabled={loading}>{t("auth.signIn")}</Button>
                   </form>
                 </TabsContent>
                 <TabsContent value="signup" className="mt-4 space-y-4">
                   <form onSubmit={handleSignUp} className="space-y-3">
                     <div className="space-y-1">
-                      <Label htmlFor="name">Full name</Label>
+                      <Label htmlFor="name">{t("auth.fullName")}</Label>
                       <Input id="name" required value={fullName} onChange={e => setFullName(e.target.value)} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="email2">Email</Label>
+                      <Label htmlFor="email2">{t("auth.email")}</Label>
                       <Input id="email2" type="email" required value={email} onChange={e => setEmail(e.target.value)} />
                     </div>
                     <div className="space-y-1">
-                      <Label htmlFor="password2">Password</Label>
+                      <Label htmlFor="password2">{t("auth.password")}</Label>
                       <Input id="password2" type="password" required minLength={6} value={password} onChange={e => setPassword(e.target.value)} />
                     </div>
-                    <Button type="submit" className="w-full" disabled={loading}>Create account</Button>
+                    <Button type="submit" className="w-full" disabled={loading}>{t("auth.createAccount")}</Button>
                   </form>
                 </TabsContent>
               </Tabs>
@@ -179,15 +184,16 @@ function AuthPage() {
                 <div className="relative">
                   <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
                   <div className="relative flex justify-center text-xs uppercase">
-                    <span className="bg-card px-2 text-muted-foreground">or</span>
+                    <span className="bg-card px-2 text-muted-foreground">{t("common.or")}</span>
                   </div>
                 </div>
                 <Button variant="outline" className="mt-4 w-full" onClick={handleGoogle}>
-                  Continue with Google
+                  {t("auth.google")}
                 </Button>
               </div>
             </CardContent>
           </Card>
+          </div>
         </div>
       </div>
     </div>
