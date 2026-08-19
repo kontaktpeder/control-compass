@@ -1,91 +1,41 @@
--- Per-obligation legal basis links (paragraph-level Lovdata URLs)
+-- Correct five obligation legal citations/URLs and Bokføringsloven source reference
 
-ALTER TABLE public.obligations
-  ADD COLUMN IF NOT EXISTS legal_citation text,
-  ADD COLUMN IF NOT EXISTS legal_url text;
-
--- Fix broken /LOV/ Lovdata URLs on law sources
-UPDATE public.sources SET url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44'
-  WHERE reference = 'LOV-1997-06-13-44';
-UPDATE public.sources SET url = 'https://lovdata.no/dokument/NL/lov/1998-07-17-56'
-  WHERE reference = 'LOV-1998-07-17-56';
 UPDATE public.sources SET
   reference = 'LOV-2004-11-19-73',
   url = 'https://lovdata.no/dokument/NL/lov/2004-11-19-73'
-  WHERE reference = 'LOV-2004-07-02-73';
-
--- Paragraph-level links for seeded playbook obligations
-UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 2-2',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A72-2'
-WHERE title = 'Articles of Association (Vedtekter)';
-
-UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 2-1',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A72-1'
-WHERE title = 'Incorporation Certificate (Stiftelsesdokument)';
+WHERE reference = 'LOV-2004-07-02-73';
 
 UPDATE public.obligations SET
   legal_citation = 'Aksjeloven § 3-1, § 2-12',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A73-1'
+  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A73-1',
+  why = 'The Companies Act §3-1 requires minimum share capital of NOK 30 000; payment must be completed under §2-12.'
 WHERE title = 'Share Capital Confirmation';
 
 UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 2-18',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A72-18'
-WHERE title = 'Brønnøysund Registration (Foretaksregisteret)';
-
-UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 6-1, § 6-2',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A76-1'
-WHERE title = 'Managing Director & Board Appointment';
-
-UPDATE public.obligations SET
   legal_citation = 'Bokføringsloven § 6',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/2004-11-19-73/%C2%A76'
+  legal_url = 'https://lovdata.no/dokument/NL/lov/2004-11-19-73/%C2%A76',
+  why = 'A separate business bank account is required to keep company funds separate from private funds and satisfy traceability requirements under the Bookkeeping Act §6.'
 WHERE title = 'Business Bank Account';
 
 UPDATE public.obligations SET
   legal_citation = 'Bokføringsloven § 7',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/2004-11-19-73/%C2%A77'
+  legal_url = 'https://lovdata.no/dokument/NL/lov/2004-11-19-73/%C2%A77',
+  why = 'The Bookkeeping Act §7 requires bookkeeping from day one — transactions must be recorded chronologically.'
 WHERE title = 'Accounting System Active';
 
 UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 4-5',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A74-5'
-WHERE title = 'Shareholder Register (Aksjeeierbok)';
-
-UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 6-29',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A76-29'
-WHERE title = 'First Board Minutes';
-
-UPDATE public.obligations SET
-  legal_citation = 'Aksjeloven § 6-29',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A76-29'
-WHERE title = 'Equipment Purchase Resolution';
-
-UPDATE public.obligations SET
-  legal_citation = 'Merverdiavgiftsloven § 2-1',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/2009-06-19-58/%C2%A72-1'
-WHERE title = 'Tax Registrations (MVA if applicable)';
-
-UPDATE public.obligations SET
-  legal_citation = 'Arbeidsmiljøloven § 3-1',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/2005-06-17-62/%C2%A73-1'
-WHERE title = 'HSE Policy (Internkontroll)';
-
-UPDATE public.obligations SET
   legal_citation = 'Aksjeloven § 5-5',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A75-5'
+  legal_url = 'https://lovdata.no/dokument/NL/lov/1997-06-13-44/%C2%A75-5',
+  why = 'The Companies Act §5-5 requires an ordinary general meeting within six months of the financial year end.'
 WHERE title = 'Annual General Meeting Minutes';
 
 UPDATE public.obligations SET
   legal_citation = 'Regnskapsloven § 8-2',
-  legal_url = 'https://lovdata.no/dokument/NL/lov/1998-07-17-56/%C2%A78-2'
+  legal_url = 'https://lovdata.no/dokument/NL/lov/1998-07-17-56/%C2%A78-2',
+  why = 'The Accounting Act §8-2 requires annual accounts to be submitted to Regnskapsregisteret after adoption.'
 WHERE title = 'Annual Accounts Submitted';
 
--- Updated seed: correct Lovdata URLs + legal basis on each obligation
+-- Re-apply corrected seed function (matches 20260819213000 after fix)
 CREATE OR REPLACE FUNCTION public.seed_incorporate_playbook(_org uuid)
  RETURNS void
  LANGUAGE plpgsql

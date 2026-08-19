@@ -44,7 +44,7 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "Share Capital Confirmation": {
     title: "Bekreftelse på aksjekapital",
-    why: "Aksjeloven § 2-8 krever at innbetalt aksjekapital på minst 30 000 kroner bekreftes av bank eller revisor.",
+    why: "Aksjeloven § 3-1 krever minimum aksjekapital på 30 000 kroner; innskudd skal gjøres opp etter § 2-12.",
     responsible: "Stiftere",
     evidence: ["Bankbekreftelse på innbetalt kapital"],
   },
@@ -86,13 +86,13 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "Business Bank Account": {
     title: "Bedriftskonto",
-    why: "Egen bedriftskonto kreves for å holde selskapsmidler adskilt fra private midler og oppfylle bokføringsreglene.",
+    why: "Egen bedriftskonto kreves for å holde selskapsmidler adskilt fra private midler og oppfylle sporbarhetskravet i bokføringsloven § 6.",
     responsible: "Daglig leder",
     evidence: ["Bekreftelse på bankkonto"],
   },
   "Accounting System Active": {
     title: "Regnskapssystem i bruk",
-    why: "Bokføringsloven krever et bokføringssystem fra dag én — transaksjoner skal registreres kronologisk.",
+    why: "Bokføringsloven § 7 krever løpende bokføring fra dag én — transaksjoner skal registreres kronologisk.",
     responsible: "Regnskapsfører",
     evidence: ["Avtale eller faktura for regnskapssystem"],
   },
@@ -134,13 +134,13 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "Annual General Meeting Minutes": {
     title: "Protokoll fra ordinær generalforsamling",
-    why: "Aksjeloven krever ordinær generalforsamling innen seks måneder etter regnskapsårets slutt.",
+    why: "Aksjeloven § 5-5 krever ordinær generalforsamling innen seks måneder etter regnskapsårets slutt.",
     responsible: "Styret",
     evidence: ["Signert generalforsamlingsprotokoll"],
   },
   "Annual Accounts Submitted": {
     title: "Årsregnskap innsendt",
-    why: "Årsregnskapet skal fastsettes og sendes inn til Regnskapsregisteret hvert år.",
+    why: "Regnskapsloven § 8-2 krever at årsregnskapet sendes inn til Regnskapsregisteret etter fastsetting.",
     responsible: "Regnskapsfører",
     evidence: ["Innsendt årsregnskap"],
   },

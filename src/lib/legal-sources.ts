@@ -22,8 +22,8 @@ export const PLAYBOOK_LEGAL_BASIS: Record<
     url: lovdataParagraphUrl("1997-06-13-44", "§2-1"),
   },
   "Share Capital Confirmation": {
-    citation: "Aksjeloven § 2-8",
-    url: lovdataParagraphUrl("1997-06-13-44", "§2-8"),
+    citation: "Aksjeloven § 3-1, § 2-12",
+    url: lovdataParagraphUrl("1997-06-13-44", "§3-1"),
   },
   "Brønnøysund Registration (Foretaksregisteret)": {
     citation: "Aksjeloven § 2-18",
@@ -34,12 +34,12 @@ export const PLAYBOOK_LEGAL_BASIS: Record<
     url: lovdataParagraphUrl("1997-06-13-44", "§6-1"),
   },
   "Business Bank Account": {
-    citation: "Bokføringsloven § 5",
-    url: lovdataParagraphUrl("2004-07-02-73", "§5"),
+    citation: "Bokføringsloven § 6",
+    url: lovdataParagraphUrl("2004-11-19-73", "§6"),
   },
   "Accounting System Active": {
-    citation: "Bokføringsloven § 3",
-    url: lovdataParagraphUrl("2004-07-02-73", "§3"),
+    citation: "Bokføringsloven § 7",
+    url: lovdataParagraphUrl("2004-11-19-73", "§7"),
   },
   "Shareholder Register (Aksjeeierbok)": {
     citation: "Aksjeloven § 4-5",
@@ -62,12 +62,12 @@ export const PLAYBOOK_LEGAL_BASIS: Record<
     url: lovdataParagraphUrl("2005-06-17-62", "§3-1"),
   },
   "Annual General Meeting Minutes": {
-    citation: "Aksjeloven § 5-6",
-    url: lovdataParagraphUrl("1997-06-13-44", "§5-6"),
+    citation: "Aksjeloven § 5-5",
+    url: lovdataParagraphUrl("1997-06-13-44", "§5-5"),
   },
   "Annual Accounts Submitted": {
-    citation: "Regnskapsloven § 3-3",
-    url: lovdataParagraphUrl("1998-07-17-56", "§3-3"),
+    citation: "Regnskapsloven § 8-2",
+    url: lovdataParagraphUrl("1998-07-17-56", "§8-2"),
   },
 };
 
