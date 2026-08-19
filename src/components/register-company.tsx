@@ -1,15 +1,20 @@
-import { Link } from "@tanstack/react-router";
-import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
 import { DocumentUpload } from "@/components/document-upload";
-import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
+import type { ReviewAssignment } from "@/components/document-review-panel";
+import {
+  Accordion,
+  AccordionContent,
+  AccordionItem,
+  AccordionTrigger,
+} from "@/components/ui/accordion";
 import { toast } from "sonner";
-import { FileText, ChevronRight, ExternalLink } from "lucide-react";
+import { FileText, ExternalLink } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { localizeObligation } from "@/lib/playbook-i18n";
+import { legalBasisForObligation } from "@/lib/legal-sources";
 
 type EvidenceLite = {
   id: string;
@@ -74,9 +79,14 @@ function lifecycleFor(a: Assignment | undefined): DocLifecycle {
   return a.status === "verified" ? "on_file" : "needs_review";
 }
 
-export function RegisterCompanyView({ orgId }: { orgId: string }) {
+export function RegisterCompanyGuide({
+  orgId,
+  onReview,
+}: {
+  orgId: string;
+  onReview: (a: ReviewAssignment) => void;
+}) {
   const { t, locale } = useT();
-  const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
 
   const data = useQuery({
     queryKey: ["register-company", orgId],
@@ -106,74 +116,81 @@ export function RegisterCompanyView({ orgId }: { orgId: string }) {
     },
   });
 
-  const obs = (data.data?.obs ?? []).map((o) => localizeObligation(locale, o));
   const byOb = data.data?.byOb ?? new Map<string, Assignment>();
+  const obs = (data.data?.obs ?? []).map((o) => ({
+    ...localizeObligation(locale, o),
+    legal: legalBasisForObligation(o.title, {
+      legal_citation: o.legal_citation,
+      legal_url: o.legal_url,
+    }),
+  }));
   const required = obs.filter((o) => o.is_required !== false);
   const company = obs.filter((o) => o.is_required === false);
   const onFile = required.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
   const needsReview = obs.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
 
   return (
-    <div>
-      <h1 className="text-2xl font-semibold tracking-tight">{t("workflow.title")}</h1>
-      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("workflow.lede")}</p>
-
-      <div className="mt-4 flex flex-wrap gap-6 text-sm">
-        <span className="text-muted-foreground">
-          {t("workflow.requiredOnFile", { onFile, total: required.length })}
-        </span>
-        {needsReview > 0 && (
-          <span className="text-status-partial">
-            {t("workflow.awaitingReview", { count: needsReview })}
+    <div className="mb-8 rounded-lg border border-border bg-card">
+      <div className="border-b border-border px-4 py-3">
+        <p className="text-sm font-medium">{t("workflow.title")}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{t("workflow.lede")}</p>
+        <div className="mt-2 flex flex-wrap gap-4 text-xs">
+          <span className="text-muted-foreground">
+            {t("workflow.requiredOnFile", { onFile, total: required.length })}
           </span>
-        )}
+          {needsReview > 0 && (
+            <span className="text-status-partial">
+              {t("workflow.awaitingReview", { count: needsReview })}
+            </span>
+          )}
+        </div>
       </div>
 
-      <Section
+      <GuideSection
         title={t("workflow.requiredTitle")}
+        subtitle={t("workflow.requiredSubtitle")}
         orgId={orgId}
         obligations={required}
         byOb={byOb}
-        onReview={setReviewing}
+        onReview={onReview}
       />
-      <Section
+      <GuideSection
         title={t("workflow.companyTitle")}
+        subtitle={t("workflow.companySubtitle")}
         orgId={orgId}
         obligations={company}
         byOb={byOb}
-        onReview={setReviewing}
-      />
-
-      <DocumentReviewPanel
-        open={!!reviewing}
-        onOpenChange={(v) => {
-          if (!v) setReviewing(null);
-        }}
-        assignment={reviewing}
+        onReview={onReview}
       />
     </div>
   );
 }
 
-function Section({
+function GuideSection({
   title,
+  subtitle,
   orgId,
   obligations,
   byOb,
   onReview,
 }: {
   title: string;
+  subtitle: string;
   orgId: string;
-  obligations: ObligationRow[];
+  obligations: Array<
+    ObligationRow & { legal: { citation: string; url: string } | null }
+  >;
   byOb: Map<string, Assignment>;
   onReview: (a: ReviewAssignment) => void;
 }) {
   const { t } = useT();
   if (obligations.length === 0) return null;
+
   return (
-    <section className="mt-8">
-      <h2 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h2>
-      <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+    <div className="px-4 py-3">
+      <p className="text-sm font-medium">{title}</p>
+      <p className="mb-1 text-xs text-muted-foreground">{subtitle}</p>
+      <Accordion type="single" collapsible>
         {obligations.map((o) => {
           const assignment = byOb.get(o.id);
           const lifecycle = lifecycleFor(assignment);
@@ -184,79 +201,102 @@ function Section({
             if (r) onReview(r);
           };
           return (
-            <li key={o.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="truncate text-sm font-medium">{o.title}</p>
+            <AccordionItem key={o.id} value={o.id} className="border-border">
+              <AccordionTrigger className="py-3 hover:no-underline">
+                <span className="flex min-w-0 flex-1 items-center gap-2 pr-3">
+                  <span className="truncate text-sm font-medium">{o.title}</span>
                   <DocumentStatusPill state={lifecycle} />
-                </div>
-                {ev && (
-                  <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                    <FileText className="h-3 w-3 shrink-0" />
-                    <span className="truncate">{ev.file_name}</span>
-                  </p>
-                )}
-              </div>
-
-              <div className="flex shrink-0 items-center gap-1.5">
-                {lifecycle === "no_document" && (
-                  <DocumentUpload
-                    orgId={orgId}
-                    hintObligationId={o.id}
-                    context="workflow"
-                    size="sm"
-                    variant="default"
-                    label={t("common.upload")}
-                  />
-                )}
-                {lifecycle === "needs_review" && assignment && (
-                  <Button size="sm" onClick={openReview}>
-                    {t("workflow.reviewNow")}
-                  </Button>
-                )}
-                {lifecycle === "on_file" && ev && assignment && (
-                  <>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={async () => {
-                        const { data, error } = await supabase.storage
-                          .from("evidence")
-                          .createSignedUrl(ev.file_path, 60);
-                        if (error || !data?.signedUrl) {
-                          toast.error(error?.message ?? t("workflow.openFailed"));
-                          return;
-                        }
-                        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-                      }}
+                </span>
+              </AccordionTrigger>
+              <AccordionContent>
+                <div className="space-y-3 pb-1">
+                  {o.why && <p className="text-sm text-muted-foreground">{o.why}</p>}
+                  {o.responsible && (
+                    <p className="text-xs text-muted-foreground">
+                      <span className="font-medium text-foreground/70">{t("workflow.responsible")}</span>{" "}
+                      {o.responsible}
+                    </p>
+                  )}
+                  {o.legal?.url && (
+                    <a
+                      href={o.legal.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground hover:underline"
                     >
-                      <ExternalLink className="mr-1 h-3 w-3" />
-                      {t("common.view")}
-                    </Button>
-                    <DocumentUpload
-                      orgId={orgId}
-                      hintObligationId={o.id}
-                      context="workflow"
-                      mode="replace"
-                      assignmentId={assignment.id}
-                      size="sm"
-                      variant="ghost"
-                      label={t("common.replace")}
-                    />
-                  </>
-                )}
-                <Link
-                  to="/o/$orgId/obligations/$id"
-                  params={{ orgId, id: o.id }}
-                  className="inline-flex items-center text-[11px] text-muted-foreground hover:text-foreground hover:underline"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </Link>
-              </div>
-            </li>
+                      <ExternalLink className="h-3 w-3" />
+                      {o.legal.citation}
+                    </a>
+                  )}
+                  {o.evidence_requirements && o.evidence_requirements.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium">{t("obligations.requiredEvidence")}</p>
+                      <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
+                        {o.evidence_requirements.map((req) => (
+                          <li key={req}>{req}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {ev && (
+                    <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                      <FileText className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{ev.file_name}</span>
+                    </p>
+                  )}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {lifecycle === "no_document" && (
+                      <DocumentUpload
+                        orgId={orgId}
+                        hintObligationId={o.id}
+                        context="workflow"
+                        size="sm"
+                        variant="default"
+                        label={t("common.upload")}
+                      />
+                    )}
+                    {lifecycle === "needs_review" && assignment && (
+                      <Button size="sm" onClick={openReview}>
+                        {t("workflow.reviewNow")}
+                      </Button>
+                    )}
+                    {lifecycle === "on_file" && ev && assignment && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={async () => {
+                            const { data, error } = await supabase.storage
+                              .from("evidence")
+                              .createSignedUrl(ev.file_path, 60);
+                            if (error || !data?.signedUrl) {
+                              toast.error(error?.message ?? t("workflow.openFailed"));
+                              return;
+                            }
+                            window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                          }}
+                        >
+                          {t("common.view")}
+                        </Button>
+                        <DocumentUpload
+                          orgId={orgId}
+                          hintObligationId={o.id}
+                          context="workflow"
+                          mode="replace"
+                          assignmentId={assignment.id}
+                          size="sm"
+                          variant="ghost"
+                          label={t("common.replace")}
+                        />
+                      </>
+                    )}
+                  </div>
+                </div>
+              </AccordionContent>
+            </AccordionItem>
           );
         })}
-      </ul>
-    </section>
+      </Accordion>
+    </div>
   );
 }

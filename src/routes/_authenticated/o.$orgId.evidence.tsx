@@ -1,23 +1,34 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { DocumentUpload, type DocumentUploadHandle } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { DocumentMetaSheet } from "@/components/document-meta-sheet";
-import { RegisterCompanyView } from "@/components/register-company";
+import { RegisterCompanyGuide } from "@/components/register-company";
 import {
   LibraryBrowser,
   LibraryEmpty,
   LibraryPageShell,
+  useSelectedIds,
   type LibraryEntry,
   type LibraryMenuAction,
 } from "@/components/library-browser";
 import { useLibraryLayout } from "@/hooks/use-library-layout";
 import { Button } from "@/components/ui/button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { ArrowLeft } from "lucide-react";
+import { X } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { localizeObligationTitle } from "@/lib/playbook-i18n";
 import { isDocumentCategory, type LibraryItem } from "@/lib/library";
@@ -51,14 +62,26 @@ type AssignmentRow = {
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
   const { mode } = Route.useSearch();
+  const registerMode = mode === "register";
   const navigate = useNavigate();
+  const qc = useQueryClient();
   const { t, locale } = useT();
   const [layout, setLayout] = useLibraryLayout();
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
+  const { selectedIds, toggle, clear } = useSelectedIds();
   const replaceUploadRef = useRef<DocumentUploadHandle>(null);
   const replaceAssignmentIdRef = useRef<string | null>(null);
   const replaceHintIdRef = useRef<string | null>(null);
+
+  const setRegisterMode = (on: boolean) => {
+    void navigate({
+      to: "/o/$orgId/evidence",
+      params: { orgId },
+      search: on ? { mode: "register" } : {},
+    });
+  };
 
   const documents = useQuery({
     queryKey: ["documents", orgId],
@@ -184,6 +207,21 @@ function DocumentsPage() {
     });
   };
 
+  const deleteIds = async (ids: string[]) => {
+    const rows = ids.map((id) => byId.get(id)).filter((d): d is LibraryItem => !!d);
+    const paths = rows.map((r) => r.filePath).filter((p): p is string => !!p);
+    if (paths.length) {
+      const { error } = await supabase.storage.from("evidence").remove(paths);
+      if (error) throw new Error(error.message);
+    }
+    const { error } = await supabase.from("evidence").delete().in("id", ids);
+    if (error) throw new Error(error.message);
+    toast.success(t("library.deleted"));
+    clear();
+    await qc.invalidateQueries({ queryKey: ["documents", orgId] });
+    await qc.invalidateQueries({ queryKey: ["register-company", orgId] });
+  };
+
   const menuFor = (entry: LibraryEntry): LibraryMenuAction[] => {
     const d = byId.get(entry.id);
     if (!d) return [];
@@ -206,27 +244,16 @@ function DocumentsPage() {
         },
       });
     }
+    actions.push({
+      id: "delete",
+      label: t("common.delete"),
+      destructive: true,
+      onSelect: () => setPendingDelete([d.id]),
+    });
     return actions;
   };
 
-  if (mode === "register") {
-    return (
-      <LibraryPageShell>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="-ml-2 mb-4"
-          onClick={() =>
-            navigate({ to: "/o/$orgId/evidence", params: { orgId }, search: {} })
-          }
-        >
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          {t("library.backToLibrary")}
-        </Button>
-        <RegisterCompanyView orgId={orgId} />
-      </LibraryPageShell>
-    );
-  }
+  const selectedCount = selectedIds.size;
 
   return (
     <LibraryPageShell
@@ -237,36 +264,53 @@ function DocumentsPage() {
         </div>
       }
     >
+      {registerMode && (
+        <RegisterCompanyGuide orgId={orgId} onReview={setReviewing} />
+      )}
+
       {documents.isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : (
-      <LibraryBrowser
-        items={items}
-        layout={layout}
-        onLayoutChange={setLayout}
-        heading={t("library.recent")}
-        onOpen={(item) => {
-          const d = byId.get(item.id);
-          if (d?.filePath) void openFile(d.filePath);
-        }}
-        menuFor={menuFor}
-        toolbarStart={
-          <Button
-            size="sm"
-            variant="outline"
-            onClick={() =>
-              navigate({
-                to: "/o/$orgId/evidence",
-                params: { orgId },
-                search: { mode: "register" },
-              })
-            }
-          >
-            {t("library.registerMode")}
-          </Button>
-        }
-        empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
-      />
+        <LibraryBrowser
+          items={items}
+          layout={layout}
+          onLayoutChange={setLayout}
+          heading={t("library.recent")}
+          onOpen={(item) => {
+            const d = byId.get(item.id);
+            if (d?.filePath) void openFile(d.filePath);
+          }}
+          menuFor={menuFor}
+          selectedIds={selectedIds}
+          onToggleSelect={toggle}
+          toolbarStart={
+            <>
+              {registerMode ? (
+                <span className="inline-flex items-center rounded-md border border-border bg-secondary text-sm">
+                  <span className="px-2.5 py-1 font-medium">{t("library.registerMode")}</span>
+                  <button
+                    type="button"
+                    className="border-l border-border px-1.5 py-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                    aria-label={t("library.exitMode")}
+                    onClick={() => setRegisterMode(false)}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </span>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setRegisterMode(true)}>
+                  {t("library.registerMode")}
+                </Button>
+              )}
+              {selectedCount > 0 && (
+                <Button size="sm" variant="destructive" onClick={() => setPendingDelete([...selectedIds])}>
+                  {t("common.delete")} · {selectedCount}
+                </Button>
+              )}
+            </>
+          }
+          empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
+        />
       )}
 
       <DocumentReviewPanel
@@ -293,6 +337,34 @@ function DocumentsPage() {
         hintObligationIdRef={replaceHintIdRef}
         className="hidden"
       />
+      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("library.deleteConfirmTitle")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("library.deleteConfirm", { count: pendingDelete?.length ?? 0 })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={async (e) => {
+                e.preventDefault();
+                if (!pendingDelete?.length) return;
+                try {
+                  await deleteIds(pendingDelete);
+                  setPendingDelete(null);
+                } catch (err) {
+                  toast.error(err instanceof Error ? err.message : t("library.deleteFailed"));
+                }
+              }}
+            >
+              {t("common.delete")}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </LibraryPageShell>
   );
 }

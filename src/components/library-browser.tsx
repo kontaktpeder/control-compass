@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { FileText, LayoutGrid, List, MoreVertical } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -24,6 +25,7 @@ export type LibraryMenuAction = {
   id: string;
   label: string;
   onSelect: () => void;
+  destructive?: boolean;
 };
 
 type Props = {
@@ -35,6 +37,8 @@ type Props = {
   toolbarStart?: ReactNode;
   empty: ReactNode;
   heading: string;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
 };
 
 export function LibraryBrowser({
@@ -46,9 +50,12 @@ export function LibraryBrowser({
   toolbarStart,
   empty,
   heading,
+  selectedIds,
+  onToggleSelect,
 }: Props) {
   const { t } = useT();
   const previewUrls = usePreviewUrls(items);
+  const selectable = !!onToggleSelect;
 
   return (
     <div>
@@ -90,6 +97,8 @@ export function LibraryBrowser({
                 previewUrl={item.filePath ? previewUrls[item.filePath] : undefined}
                 menu={menuFor(item)}
                 onOpen={() => onOpen(item)}
+                selected={selectedIds?.has(item.id) ?? false}
+                onToggleSelect={selectable ? () => onToggleSelect!(item.id) : undefined}
               />
             </li>
           ))}
@@ -98,7 +107,13 @@ export function LibraryBrowser({
         <ul className="divide-y divide-border rounded-lg border border-border bg-card">
           {items.map((item) => (
             <li key={item.id}>
-              <LibraryRow item={item} menu={menuFor(item)} onOpen={() => onOpen(item)} />
+              <LibraryRow
+                item={item}
+                menu={menuFor(item)}
+                onOpen={() => onOpen(item)}
+                selected={selectedIds?.has(item.id) ?? false}
+                onToggleSelect={selectable ? () => onToggleSelect!(item.id) : undefined}
+              />
             </li>
           ))}
         </ul>
@@ -112,23 +127,47 @@ function LibraryCard({
   previewUrl,
   menu,
   onOpen,
+  selected,
+  onToggleSelect,
 }: {
   item: LibraryEntry;
   previewUrl?: string;
   menu: LibraryMenuAction[];
   onOpen: () => void;
+  selected: boolean;
+  onToggleSelect?: () => void;
 }) {
+  const { t } = useT();
   return (
     <div>
-      <button
-        type="button"
-        onClick={onOpen}
-        className="block w-full overflow-hidden rounded-sm border border-border bg-white shadow-sm transition hover:border-primary/40 hover:shadow-md"
-      >
-        <div className="aspect-[3/4] overflow-hidden bg-muted/40">
-          <PreviewSurface item={item} url={previewUrl} />
-        </div>
-      </button>
+      <div className="relative">
+        {onToggleSelect && (
+          <div
+            className="absolute left-2 top-2 z-10"
+            onClick={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <Checkbox
+              checked={selected}
+              onCheckedChange={() => onToggleSelect()}
+              aria-label={t("library.select")}
+              className="border-border bg-white shadow-sm"
+            />
+          </div>
+        )}
+        <button
+          type="button"
+          onClick={onOpen}
+          className={cn(
+            "block w-full overflow-hidden rounded-sm border bg-white shadow-sm transition hover:border-primary/40 hover:shadow-md",
+            selected ? "border-primary ring-2 ring-primary/30" : "border-border",
+          )}
+        >
+          <div className="aspect-[3/4] overflow-hidden bg-muted/40">
+            <PreviewSurface item={item} url={previewUrl} />
+          </div>
+        </button>
+      </div>
       <div className="mt-2 flex items-center gap-1.5">
         <FileText className="h-4 w-4 shrink-0 text-primary" />
         <p className="min-w-0 flex-1 truncate text-sm">{item.title}</p>
@@ -142,13 +181,25 @@ function LibraryRow({
   item,
   menu,
   onOpen,
+  selected,
+  onToggleSelect,
 }: {
   item: LibraryEntry;
   menu: LibraryMenuAction[];
   onOpen: () => void;
+  selected: boolean;
+  onToggleSelect?: () => void;
 }) {
+  const { t } = useT();
   return (
-    <div className="flex items-center gap-3 px-3 py-2 hover:bg-muted/40">
+    <div className={cn("flex items-center gap-3 px-3 py-2 hover:bg-muted/40", selected && "bg-muted/50")}>
+      {onToggleSelect && (
+        <Checkbox
+          checked={selected}
+          onCheckedChange={() => onToggleSelect()}
+          aria-label={t("library.select")}
+        />
+      )}
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <FileText className="h-4 w-4 shrink-0 text-primary" />
         <span className="truncate text-sm">{item.title}</span>
@@ -177,7 +228,11 @@ function ItemMenu({ actions }: { actions: LibraryMenuAction[] }) {
       </DropdownMenuTrigger>
       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
         {actions.map((a) => (
-          <DropdownMenuItem key={a.id} onSelect={a.onSelect}>
+          <DropdownMenuItem
+            key={a.id}
+            onSelect={a.onSelect}
+            className={a.destructive ? "text-destructive focus:text-destructive" : undefined}
+          >
             {a.label}
           </DropdownMenuItem>
         ))}
@@ -255,7 +310,6 @@ function usePreviewUrls(items: LibraryEntry[]) {
     return () => {
       cancelled = true;
     };
-    // paths is derived from items; key captures membership.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
@@ -278,3 +332,18 @@ export function LibraryPageShell({ children, mutedTop }: { children: ReactNode; 
     </div>
   );
 }
+
+export function useSelectedIds() {
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const toggle = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+  const clear = () => setSelectedIds(new Set());
+  return { selectedIds, toggle, clear, setSelectedIds };
+}
+
