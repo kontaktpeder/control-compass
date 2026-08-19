@@ -1,26 +1,33 @@
-import { createFileRoute, Link, useParams } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
+import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { DocumentUpload } from "@/components/document-upload";
+import { DocumentUpload, type DocumentUploadHandle } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { DocumentMetaSheet } from "@/components/document-meta-sheet";
-import { toast } from "sonner";
-import { FileText, Sparkles, Link2, ExternalLink, Pencil } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { RegisterCompanyView } from "@/components/register-company";
 import {
-  DOCUMENT_CATEGORIES,
-  isOverdue,
-  type DocumentCategory,
-  type LibraryItem,
-} from "@/lib/library";
+  LibraryBrowser,
+  LibraryEmpty,
+  LibraryPageShell,
+  type LibraryEntry,
+  type LibraryMenuAction,
+} from "@/components/library-browser";
+import { useLibraryLayout } from "@/hooks/use-library-layout";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import { ArrowLeft } from "lucide-react";
 import { useT } from "@/components/locale-provider";
-import type { MessageKey } from "@/lib/i18n";
 import { localizeObligationTitle } from "@/lib/playbook-i18n";
+import { isDocumentCategory, type LibraryItem } from "@/lib/library";
+
+const documentsSearch = z.object({
+  mode: z.enum(["register"]).optional(),
+});
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
+  validateSearch: documentsSearch.parse,
   component: DocumentsPage,
 });
 
@@ -41,16 +48,17 @@ type AssignmentRow = {
   ai_reasoning_full: string | null;
 };
 
-type CategoryTab = "all" | "uncategorized" | DocumentCategory;
-type ChipFilter = "mine" | "needs_review" | "overdue" | "linked";
-
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
-  const { t, dateLocale, locale } = useT();
-  const [tab, setTab] = useState<CategoryTab>("all");
-  const [chips, setChips] = useState<ChipFilter[]>([]);
+  const { mode } = Route.useSearch();
+  const navigate = useNavigate();
+  const { t, locale } = useT();
+  const [layout, setLayout] = useLibraryLayout();
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const replaceUploadRef = useRef<DocumentUploadHandle>(null);
+  const replaceAssignmentIdRef = useRef<string | null>(null);
+  const replaceHintIdRef = useRef<string | null>(null);
 
   const documents = useQuery({
     queryKey: ["documents", orgId],
@@ -93,8 +101,8 @@ function DocumentsPage() {
           id: row.id,
           kind: "file" as const,
           title: row.file_name,
-          category: row.category,
-          aiCategory: row.ai_category,
+          category: isDocumentCategory(row.category) ? row.category : null,
+          aiCategory: isDocumentCategory(row.ai_category) ? row.ai_category : null,
           aiCategoryConfidence: row.ai_category_confidence,
           ownerUserId: row.responsible_user_id,
           ownerName: row.responsible_user_id ? nameById.get(row.responsible_user_id) ?? null : null,
@@ -129,61 +137,27 @@ function DocumentsPage() {
     },
   });
 
-  const me = useQuery({
-    queryKey: ["auth-user"],
-    queryFn: async () => {
-      const { data } = await supabase.auth.getUser();
-      return data.user?.id ?? null;
-    },
-  });
+  const items: LibraryEntry[] = useMemo(
+    () =>
+      (documents.data ?? []).map((d) => ({
+        id: d.id,
+        title: d.title,
+        previewText: d.summary,
+        mimeType: d.mimeType,
+        filePath: d.filePath,
+      })),
+    [documents.data],
+  );
 
-  const { visible, tabCounts, chipCounts } = useMemo(() => {
-    const list = documents.data ?? [];
-    const tabCounts = {
-      all: list.length,
-      uncategorized: list.filter((d) => !d.category).length,
-      operations: list.filter((d) => d.category === "operations").length,
-      finance: list.filter((d) => d.category === "finance").length,
-      contracts: list.filter((d) => d.category === "contracts").length,
-      hr: list.filter((d) => d.category === "hr").length,
-      reference: list.filter((d) => d.category === "reference").length,
-    };
-    const chipCounts = {
-      mine: list.filter((d) => d.ownerUserId && d.ownerUserId === me.data).length,
-      needs_review: list.filter((d) => d.assignment?.status === "needs_review").length,
-      overdue: list.filter((d) => isOverdue(d.reviewDueAt)).length,
-      linked: list.filter((d) => !!d.obligation).length,
-    };
-    const visible = list.filter((d) => {
-      if (tab === "uncategorized" && d.category) return false;
-      if (tab !== "all" && tab !== "uncategorized" && d.category !== tab) return false;
-      if (chips.includes("mine") && d.ownerUserId !== me.data) return false;
-      if (chips.includes("needs_review") && d.assignment?.status !== "needs_review") return false;
-      if (chips.includes("overdue") && !isOverdue(d.reviewDueAt)) return false;
-      if (chips.includes("linked") && !d.obligation) return false;
-      return true;
-    });
-    return { visible, tabCounts, chipCounts };
-  }, [documents.data, tab, chips, me.data]);
+  const byId = useMemo(() => new Map((documents.data ?? []).map((d) => [d.id, d])), [documents.data]);
 
-  const tabs: Array<{ id: CategoryTab; label: string }> = [
-    { id: "all", label: `${t("category.all")} · ${tabCounts.all}` },
-    ...DOCUMENT_CATEGORIES.map((c) => ({
-      id: c.id as CategoryTab,
-      label: `${t(`category.${c.id}` as MessageKey)} · ${tabCounts[c.id]}`,
-    })),
-    { id: "uncategorized", label: `${t("category.uncategorized")} · ${tabCounts.uncategorized}` },
-  ];
-
-  const chipDefs: Array<{ id: ChipFilter; label: string }> = [
-    { id: "mine", label: `${t("library.chip.mine")} · ${chipCounts.mine}` },
-    { id: "needs_review", label: `${t("library.chip.needs_review")} · ${chipCounts.needs_review}` },
-    { id: "overdue", label: `${t("library.chip.overdue")} · ${chipCounts.overdue}` },
-    { id: "linked", label: `${t("library.chip.linked")} · ${chipCounts.linked}` },
-  ];
-
-  const toggleChip = (id: ChipFilter) => {
-    setChips((prev) => (prev.includes(id) ? prev.filter((c) => c !== id) : [...prev, id]));
+  const openFile = async (path: string) => {
+    const { data, error } = await supabase.storage.from("evidence").createSignedUrl(path, 60);
+    if (error || !data?.signedUrl) {
+      toast.error(error?.message ?? t("library.openFailed"));
+      return;
+    }
+    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
   const openReview = (d: LibraryItem) => {
@@ -210,166 +184,90 @@ function DocumentsPage() {
     });
   };
 
-  const openFile = async (path: string) => {
-    const { data, error } = await supabase.storage.from("evidence").createSignedUrl(path, 60);
-    if (error || !data?.signedUrl) {
-      toast.error(error?.message ?? t("library.openFailed"));
-      return;
+  const menuFor = (entry: LibraryEntry): LibraryMenuAction[] => {
+    const d = byId.get(entry.id);
+    if (!d) return [];
+    const actions: LibraryMenuAction[] = [];
+    if (d.filePath) {
+      actions.push({ id: "open", label: t("common.view"), onSelect: () => openFile(d.filePath!) });
     }
-    window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+    if (d.assignment?.status === "needs_review") {
+      actions.push({ id: "review", label: t("library.reviewAssignment"), onSelect: () => openReview(d) });
+    }
+    actions.push({ id: "edit", label: t("common.edit"), onSelect: () => setEditingId(d.id) });
+    if (d.assignment) {
+      actions.push({
+        id: "replace",
+        label: t("common.replace"),
+        onSelect: () => {
+          replaceAssignmentIdRef.current = d.assignment!.id;
+          replaceHintIdRef.current = d.obligation?.id ?? null;
+          replaceUploadRef.current?.pick();
+        },
+      });
+    }
+    return actions;
   };
 
+  if (mode === "register") {
+    return (
+      <LibraryPageShell>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="-ml-2 mb-4"
+          onClick={() =>
+            navigate({ to: "/o/$orgId/evidence", params: { orgId }, search: {} })
+          }
+        >
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          {t("library.backToLibrary")}
+        </Button>
+        <RegisterCompanyView orgId={orgId} />
+      </LibraryPageShell>
+    );
+  }
+
   return (
-    <div className="mx-auto max-w-4xl px-6 py-10">
-      <p className="eyebrow">{t("library.eyebrow")}</p>
-      <h1 className="mt-2 text-3xl font-semibold tracking-tight">{t("library.title")}</h1>
-      <p className="mt-2 max-w-2xl text-muted-foreground">
-        {t("library.lede")}
-      </p>
-
-      <Card className="mt-8 border-dashed">
-        <CardHeader>
-          <CardTitle className="text-base">{t("library.uploadTitle")}</CardTitle>
-          <CardDescription>
-            {t("library.uploadHint")}
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <DocumentUpload
-            orgId={orgId}
-            context="library"
-            label={t("library.uploadCta")}
-            onAfterUpload={(id) => setEditingId(id)}
-          />
-        </CardContent>
-      </Card>
-
-      <div className="mt-10">
-        <div className="mb-3 flex flex-wrap gap-1 border-b border-border">
-          {tabs.map((t) => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className={cn(
-                "-mb-px border-b-2 px-3 py-2 text-sm font-medium transition",
-                tab === t.id
-                  ? "border-primary text-foreground"
-                  : "border-transparent text-muted-foreground hover:text-foreground",
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
+    <LibraryPageShell
+      mutedTop={
+        <div className="mx-auto max-w-6xl px-6 py-6">
+          <p className="mb-3 text-sm text-muted-foreground">{t("library.startNew")}</p>
+          <DocumentUpload orgId={orgId} context="library" appearance="tile" />
         </div>
-
-        <div className="mb-4 flex flex-wrap gap-1.5">
-          {chipDefs.map((c) => {
-            const on = chips.includes(c.id);
-            return (
-              <button
-                key={c.id}
-                type="button"
-                onClick={() => toggleChip(c.id)}
-                className={cn(
-                  "rounded-full border px-2.5 py-0.5 text-xs transition",
-                  on
-                    ? "border-primary bg-primary/10 text-foreground"
-                    : "border-border text-muted-foreground hover:text-foreground",
-                )}
-              >
-                {c.label}
-              </button>
-            );
-          })}
-        </div>
-
-        {visible.length ? (
-          <ul className="space-y-3">
-            {visible.map((d) => {
-              const overdue = isOverdue(d.reviewDueAt);
-              return (
-                <li key={d.id} className="rounded-lg border border-border bg-card p-4">
-                  <div className="flex items-start gap-3">
-                    <FileText className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0">
-                          <p className="truncate text-sm font-medium">{d.title}</p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {d.ownerName ?? t("common.unassigned")} · {new Date(d.updatedAt).toLocaleString(dateLocale)}
-                            {d.mimeType ? ` · ${d.mimeType}` : ""}
-                            {d.sizeBytes != null ? ` · ${formatBytes(d.sizeBytes)}` : ""}
-                          </p>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap justify-end gap-1.5">
-                          <span className="rounded-full border border-border px-2 py-0.5 text-xs">
-                            {d.category
-                              ? t(`category.${d.category}` as MessageKey)
-                              : t("category.uncategorized")}
-                          </span>
-                          {overdue && (
-                            <span className="rounded-full bg-status-missing-bg px-2 py-0.5 text-xs font-medium text-status-missing">
-                              {t("library.chip.overdue")}
-                            </span>
-                          )}
-                          {d.assignment?.status === "needs_review" && (
-                            <span className="rounded-full bg-status-partial-bg px-2 py-0.5 text-xs font-medium text-status-partial">
-                              {t("library.chip.needs_review")}
-                            </span>
-                          )}
-                        </div>
-                      </div>
-
-                      {d.summary && (
-                        <p className="mt-3 flex items-start gap-1.5 text-sm text-muted-foreground">
-                          <Sparkles className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                          <span>{d.summary}</span>
-                        </p>
-                      )}
-
-                      {d.obligation && (
-                        <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
-                          <Link2 className="h-3 w-3 text-primary" />
-                          <span className="text-muted-foreground">{t("library.requirement")}</span>
-                          <Link
-                            to="/o/$orgId/obligations/$id"
-                            params={{ orgId, id: d.obligation.id }}
-                            className="rounded-md bg-muted px-2 py-0.5 hover:bg-muted/70 hover:underline"
-                          >
-                            {localizeObligationTitle(locale, d.obligation.title)}
-                          </Link>
-                        </div>
-                      )}
-
-                      <div className="mt-3 flex flex-wrap items-center gap-2">
-                        {d.assignment?.status === "needs_review" && (
-                          <Button size="sm" onClick={() => openReview(d)}>
-                            {t("library.reviewAssignment")}
-                          </Button>
-                        )}
-                        {d.filePath && (
-                          <Button size="sm" variant="outline" onClick={() => openFile(d.filePath!)}>
-                            <ExternalLink className="mr-1 h-3 w-3" />
-                            {t("common.view")}
-                          </Button>
-                        )}
-                        <Button size="sm" variant="ghost" onClick={() => setEditingId(d.id)}>
-                          <Pencil className="mr-1 h-3 w-3" />
-                          {t("common.edit")}
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-            {t("common.nothingHere")}
-          </p>
-        )}
-      </div>
+      }
+    >
+      {documents.isLoading ? (
+        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+      ) : (
+      <LibraryBrowser
+        items={items}
+        layout={layout}
+        onLayoutChange={setLayout}
+        heading={t("library.recent")}
+        onOpen={(item) => {
+          const d = byId.get(item.id);
+          if (d?.filePath) void openFile(d.filePath);
+        }}
+        menuFor={menuFor}
+        toolbarStart={
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() =>
+              navigate({
+                to: "/o/$orgId/evidence",
+                params: { orgId },
+                search: { mode: "register" },
+              })
+            }
+          >
+            {t("library.registerMode")}
+          </Button>
+        }
+        empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
+      />
+      )}
 
       <DocumentReviewPanel
         open={!!reviewing}
@@ -386,13 +284,15 @@ function DocumentsPage() {
         orgId={orgId}
         evidenceId={editingId}
       />
-    </div>
+      <DocumentUpload
+        ref={replaceUploadRef}
+        orgId={orgId}
+        context="library"
+        mode="replace"
+        assignmentIdRef={replaceAssignmentIdRef}
+        hintObligationIdRef={replaceHintIdRef}
+        className="hidden"
+      />
+    </LibraryPageShell>
   );
-}
-
-function formatBytes(n: number | null | undefined) {
-  if (!n) return "0 B";
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
 }

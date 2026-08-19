@@ -102,7 +102,7 @@ const en = {
   "workflow.eyebrow": "Workspace",
   "workflow.title": "Register Company",
   "workflow.lede":
-    "Every document folder your company needs to be in control. Upload a document, review the AI's suggestion, and confirm. A folder turns green once you've verified it.",
+    "Follow what’s on file, what needs review, and what’s still missing.",
   "workflow.requiredOnFile": "{onFile} / {total} required on file",
   "workflow.awaitingReview": "{count} awaiting your review",
   "workflow.requiredTitle": "Required documents",
@@ -117,12 +117,21 @@ const en = {
   "workflow.openFailed": "Could not open file",
 
   "library.eyebrow": "Documents",
-  "library.title": "The library",
+  "library.title": "Documents",
   "library.lede":
     "Every file has a category and an owner. Linking to a compliance requirement is optional.",
+  "library.startNew": "Start a new document",
   "library.uploadTitle": "Upload to the library",
   "library.uploadHint": "PDF or image. AI suggests a category — you can override it after upload.",
-  "library.uploadCta": "Upload document",
+  "library.uploadCta": "Upload",
+  "library.uploadBlank": "Upload",
+  "library.recent": "Documents",
+  "library.layoutGrid": "Grid",
+  "library.layoutList": "List",
+  "library.registerMode": "Register company",
+  "library.backToLibrary": "All documents",
+  "library.more": "More",
+  "library.empty": "No documents yet.",
   "library.chip.mine": "Mine",
   "library.chip.needs_review": "Needs review",
   "library.chip.overdue": "Overdue",
@@ -197,6 +206,7 @@ const en = {
   "agreements.title": "Agreements",
   "agreements.lede":
     "Control owns drafts, signing, versions and archive. Fortell can hand off drafts from Nexus — it is not the contract system.",
+  "agreements.recent": "Agreements",
   "agreements.emptyTitle": "No agreements yet",
   "agreements.emptyBody":
     "Ask Fortell in Nexus to prepare a contract draft, then confirm the handoff — it lands here as draft.",
@@ -347,7 +357,7 @@ const nb: { [K in keyof typeof en]: string } = {
   "workflow.eyebrow": "Arbeidsområde",
   "workflow.title": "Registrer selskap",
   "workflow.lede":
-    "Alle dokumentmappene selskapet trenger for å ha kontroll. Last opp et dokument, gå gjennom AI-forslaget, og bekreft. En mappe blir grønn når du har verifisert den.",
+    "Følg opp det som er på plass, det som trenger gjennomgang, og det som mangler.",
   "workflow.requiredOnFile": "{onFile} / {total} påkrevde på plass",
   "workflow.awaitingReview": "{count} venter på gjennomgang",
   "workflow.requiredTitle": "Påkrevde dokumenter",
@@ -362,12 +372,21 @@ const nb: { [K in keyof typeof en]: string } = {
   "workflow.openFailed": "Kunne ikke åpne filen",
 
   "library.eyebrow": "Dokumenter",
-  "library.title": "Biblioteket",
+  "library.title": "Dokumenter",
   "library.lede":
     "Hver fil har en kategori og en eier. Kobling til et etterlevelseskrav er valgfritt.",
+  "library.startNew": "Start et nytt dokument",
   "library.uploadTitle": "Last opp til biblioteket",
   "library.uploadHint": "PDF eller bilde. AI foreslår kategori — du kan overstyre etter opplasting.",
-  "library.uploadCta": "Last opp dokument",
+  "library.uploadCta": "Last opp",
+  "library.uploadBlank": "Last opp",
+  "library.recent": "Dokumenter",
+  "library.layoutGrid": "Rutenett",
+  "library.layoutList": "Liste",
+  "library.registerMode": "Registrer selskap",
+  "library.backToLibrary": "Alle dokumenter",
+  "library.more": "Mer",
+  "library.empty": "Ingen dokumenter ennå.",
   "library.chip.mine": "Mine",
   "library.chip.needs_review": "Trenger gjennomgang",
   "library.chip.overdue": "Forfalt",
@@ -442,6 +461,7 @@ const nb: { [K in keyof typeof en]: string } = {
   "agreements.title": "Avtaler",
   "agreements.lede":
     "Control eier utkast, signering, versjoner og arkiv. Fortell kan sende utkast fra Nexus — det er ikke avtalesystemet.",
+  "agreements.recent": "Avtaler",
   "agreements.emptyTitle": "Ingen avtaler ennå",
   "agreements.emptyBody":
     "Be Fortell i Nexus om å lage et avtaleutkast, bekreft overføringen — det lander her som utkast.",

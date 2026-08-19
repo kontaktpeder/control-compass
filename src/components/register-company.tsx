@@ -1,0 +1,262 @@
+import { Link } from "@tanstack/react-router";
+import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
+import { DocumentUpload } from "@/components/document-upload";
+import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
+import { toast } from "sonner";
+import { FileText, ChevronRight, ExternalLink } from "lucide-react";
+import { useT } from "@/components/locale-provider";
+import { localizeObligation } from "@/lib/playbook-i18n";
+
+type EvidenceLite = {
+  id: string;
+  file_name: string;
+  file_path: string;
+  document_type_candidates: Array<{ label: string; confidence: number }> | null;
+  purpose_candidates: Array<{ label: string; confidence: number }> | null;
+};
+
+type Assignment = {
+  id: string;
+  obligation_id: string;
+  evidence_id: string;
+  status: "needs_review" | "verified" | "rejected";
+  document_type: string | null;
+  purpose: string | null;
+  ai_document_type: string | null;
+  ai_document_type_confidence: number | null;
+  ai_purpose: string | null;
+  ai_purpose_confidence: number | null;
+  ai_summary: string | null;
+  ai_reasoning_full: string | null;
+  evidence: EvidenceLite | null;
+};
+
+type ObligationRow = {
+  id: string;
+  title: string;
+  why: string | null;
+  evidence_requirements: string[] | null;
+  responsible: string | null;
+  is_required: boolean | null;
+  legal_citation: string | null;
+  legal_url: string | null;
+};
+
+function toReview(a: Assignment, ob: { id: string; title: string }): ReviewAssignment | null {
+  if (!a.evidence) return null;
+  return {
+    assignment_id: a.id,
+    obligation_id: ob.id,
+    obligation_title: ob.title,
+    status: a.status === "rejected" ? "needs_review" : a.status,
+    evidence_id: a.evidence.id,
+    file_name: a.evidence.file_name,
+    file_path: a.evidence.file_path,
+    document_type: a.document_type,
+    purpose: a.purpose,
+    ai_document_type: a.ai_document_type,
+    ai_document_type_confidence: a.ai_document_type_confidence,
+    ai_purpose: a.ai_purpose,
+    ai_purpose_confidence: a.ai_purpose_confidence,
+    document_type_candidates: a.evidence.document_type_candidates,
+    purpose_candidates: a.evidence.purpose_candidates,
+    ai_summary: a.ai_summary,
+    ai_reasoning: a.ai_reasoning_full,
+  };
+}
+
+function lifecycleFor(a: Assignment | undefined): DocLifecycle {
+  if (!a) return "no_document";
+  return a.status === "verified" ? "on_file" : "needs_review";
+}
+
+export function RegisterCompanyView({ orgId }: { orgId: string }) {
+  const { t, locale } = useT();
+  const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
+
+  const data = useQuery({
+    queryKey: ["register-company", orgId],
+    queryFn: async () => {
+      const [obs, links] = await Promise.all([
+        supabase
+          .from("obligations")
+          .select(
+            "id, title, why, evidence_requirements, responsible, is_required, legal_citation, legal_url",
+          )
+          .eq("org_id", orgId)
+          .order("is_required", { ascending: false })
+          .order("title"),
+        supabase
+          .from("evidence_links")
+          .select(
+            "id, obligation_id, evidence_id, status, document_type, purpose, ai_document_type, ai_document_type_confidence, ai_purpose, ai_purpose_confidence, ai_summary, ai_reasoning_full, evidence:evidence_id(id, file_name, file_path, document_type_candidates, purpose_candidates)",
+          )
+          .eq("org_id", orgId),
+      ]);
+
+      const byOb = new Map<string, Assignment>();
+      for (const l of (links.data ?? []) as unknown as Assignment[]) {
+        if (l.obligation_id) byOb.set(l.obligation_id, l);
+      }
+      return { obs: (obs.data ?? []) as unknown as ObligationRow[], byOb };
+    },
+  });
+
+  const obs = (data.data?.obs ?? []).map((o) => localizeObligation(locale, o));
+  const byOb = data.data?.byOb ?? new Map<string, Assignment>();
+  const required = obs.filter((o) => o.is_required !== false);
+  const company = obs.filter((o) => o.is_required === false);
+  const onFile = required.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
+  const needsReview = obs.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
+
+  return (
+    <div>
+      <h1 className="text-2xl font-semibold tracking-tight">{t("workflow.title")}</h1>
+      <p className="mt-1 max-w-2xl text-sm text-muted-foreground">{t("workflow.lede")}</p>
+
+      <div className="mt-4 flex flex-wrap gap-6 text-sm">
+        <span className="text-muted-foreground">
+          {t("workflow.requiredOnFile", { onFile, total: required.length })}
+        </span>
+        {needsReview > 0 && (
+          <span className="text-status-partial">
+            {t("workflow.awaitingReview", { count: needsReview })}
+          </span>
+        )}
+      </div>
+
+      <Section
+        title={t("workflow.requiredTitle")}
+        orgId={orgId}
+        obligations={required}
+        byOb={byOb}
+        onReview={setReviewing}
+      />
+      <Section
+        title={t("workflow.companyTitle")}
+        orgId={orgId}
+        obligations={company}
+        byOb={byOb}
+        onReview={setReviewing}
+      />
+
+      <DocumentReviewPanel
+        open={!!reviewing}
+        onOpenChange={(v) => {
+          if (!v) setReviewing(null);
+        }}
+        assignment={reviewing}
+      />
+    </div>
+  );
+}
+
+function Section({
+  title,
+  orgId,
+  obligations,
+  byOb,
+  onReview,
+}: {
+  title: string;
+  orgId: string;
+  obligations: ObligationRow[];
+  byOb: Map<string, Assignment>;
+  onReview: (a: ReviewAssignment) => void;
+}) {
+  const { t } = useT();
+  if (obligations.length === 0) return null;
+  return (
+    <section className="mt-8">
+      <h2 className="mb-3 text-sm font-medium text-muted-foreground">{title}</h2>
+      <ul className="divide-y divide-border rounded-lg border border-border bg-card">
+        {obligations.map((o) => {
+          const assignment = byOb.get(o.id);
+          const lifecycle = lifecycleFor(assignment);
+          const ev = assignment?.evidence ?? null;
+          const openReview = () => {
+            if (!assignment) return;
+            const r = toReview(assignment, { id: o.id, title: o.title });
+            if (r) onReview(r);
+          };
+          return (
+            <li key={o.id} className="flex items-center gap-3 px-4 py-3">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="truncate text-sm font-medium">{o.title}</p>
+                  <DocumentStatusPill state={lifecycle} />
+                </div>
+                {ev && (
+                  <p className="mt-1 flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                    <FileText className="h-3 w-3 shrink-0" />
+                    <span className="truncate">{ev.file_name}</span>
+                  </p>
+                )}
+              </div>
+
+              <div className="flex shrink-0 items-center gap-1.5">
+                {lifecycle === "no_document" && (
+                  <DocumentUpload
+                    orgId={orgId}
+                    hintObligationId={o.id}
+                    context="workflow"
+                    size="sm"
+                    variant="default"
+                    label={t("common.upload")}
+                  />
+                )}
+                {lifecycle === "needs_review" && assignment && (
+                  <Button size="sm" onClick={openReview}>
+                    {t("workflow.reviewNow")}
+                  </Button>
+                )}
+                {lifecycle === "on_file" && ev && assignment && (
+                  <>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={async () => {
+                        const { data, error } = await supabase.storage
+                          .from("evidence")
+                          .createSignedUrl(ev.file_path, 60);
+                        if (error || !data?.signedUrl) {
+                          toast.error(error?.message ?? t("workflow.openFailed"));
+                          return;
+                        }
+                        window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                      }}
+                    >
+                      <ExternalLink className="mr-1 h-3 w-3" />
+                      {t("common.view")}
+                    </Button>
+                    <DocumentUpload
+                      orgId={orgId}
+                      hintObligationId={o.id}
+                      context="workflow"
+                      mode="replace"
+                      assignmentId={assignment.id}
+                      size="sm"
+                      variant="ghost"
+                      label={t("common.replace")}
+                    />
+                  </>
+                )}
+                <Link
+                  to="/o/$orgId/obligations/$id"
+                  params={{ orgId, id: o.id }}
+                  className="inline-flex items-center text-[11px] text-muted-foreground hover:text-foreground hover:underline"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Link>
+              </div>
+            </li>
+          );
+        })}
+      </ul>
+    </section>
+  );
+}

@@ -4,7 +4,6 @@ import { supabase } from "@/integrations/supabase/client";
 import {
   ShieldCheck,
   FileText,
-  ClipboardList,
   Building2,
   LogOut,
   Settings,
@@ -38,9 +37,13 @@ function OrgShell() {
     },
   });
 
-  const navItems: Array<{ to: string; labelKey: MessageKey; icon: typeof ClipboardList; end?: boolean }> = [
-    { to: "/o/$orgId/workflows", labelKey: "nav.registerCompany", icon: ClipboardList },
-    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText },
+  const navItems: Array<{
+    to: "/o/$orgId/evidence" | "/o/$orgId/agreements" | "/o/$orgId/settings";
+    labelKey: MessageKey;
+    icon: typeof FileText;
+    search?: Record<string, never>;
+  }> = [
+    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText, search: {} },
     { to: "/o/$orgId/agreements", labelKey: "nav.agreements", icon: FileSignature },
     { to: "/o/$orgId/settings", labelKey: "nav.settings", icon: Settings },
   ];
@@ -71,7 +74,7 @@ function OrgShell() {
                 key={item.to}
                 to={item.to}
                 params={{ orgId }}
-                activeOptions={{ exact: !!item.end }}
+                search={item.search}
                 activeProps={{ className: "bg-sidebar-accent text-sidebar-accent-foreground font-medium" }}
                 className="flex items-center gap-2 rounded-md px-3 py-2 text-sm text-sidebar-foreground transition hover:bg-sidebar-accent/60"
               >
@@ -107,6 +110,7 @@ function OrgShell() {
                   key={item.to}
                   to={item.to}
                   params={{ orgId }}
+                  search={item.search}
                   activeProps={{ className: "bg-muted font-medium text-foreground" }}
                   className="shrink-0 rounded-md px-2 py-1.5 text-muted-foreground"
                 >

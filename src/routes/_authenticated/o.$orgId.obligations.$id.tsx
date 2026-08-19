@@ -174,7 +174,7 @@ function ObligationDetail() {
             </ul>
           ) : (
             <p className="text-sm text-muted-foreground">
-              {t("obligations.noEvidence")} <Link to="/o/$orgId/evidence" params={{ orgId }} className="text-primary hover:underline">{t("obligations.uploadOne")}</Link>
+              {t("obligations.noEvidence")} <Link to="/o/$orgId/evidence" params={{ orgId }} search={{}} className="text-primary hover:underline">{t("obligations.uploadOne")}</Link>
             </p>
           )}
         </CardContent>
