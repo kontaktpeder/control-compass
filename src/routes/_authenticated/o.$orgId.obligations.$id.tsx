@@ -7,9 +7,10 @@ import { Button } from "@/components/ui/button";
 import { StatusPill, ConfidenceBadge, type Status } from "@/components/status";
 import { assessObligation } from "@/lib/ai.functions";
 import { toast } from "sonner";
-import { ArrowLeft, Sparkles, FileText } from "lucide-react";
+import { ArrowLeft, Sparkles, FileText, ExternalLink } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { localizeFrameworkName, localizeObligation, localizeSourceAuthority } from "@/lib/playbook-i18n";
+import { legalBasisForObligation } from "@/lib/legal-sources";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/obligations/$id")({
   component: ObligationDetail,
@@ -55,6 +56,12 @@ function ObligationDetail() {
   const status = (latest?.status as Status) ?? "unknown";
   const fwName = localizeFrameworkName(locale, data.data?.fw?.name);
   const srcAuthority = localizeSourceAuthority(locale, data.data?.src?.authority);
+  const legal = data.data?.ob
+    ? legalBasisForObligation(data.data.ob.title, {
+        legal_citation: data.data.ob.legal_citation,
+        legal_url: data.data.ob.legal_url,
+      })
+    : null;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-10">
@@ -66,11 +73,23 @@ function ObligationDetail() {
         <div>
           <p className="eyebrow">{fwName ?? t("obligations.eyebrow")}</p>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight">{ob?.title}</h1>
-          {data.data?.src && (
+          {legal?.url ? (
+            <p className="mt-2 text-sm">
+              <a
+                href={legal.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-primary hover:underline"
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+                {legal.citation}
+              </a>
+            </p>
+          ) : data.data?.src ? (
             <p className="mt-2 text-sm text-muted-foreground">
               {t("obligations.source")} {srcAuthority}{data.data.src.reference ? ` · ${data.data.src.reference}` : ""}
             </p>
-          )}
+          ) : null}
         </div>
         <div className="text-right">
           <StatusPill status={status} className="text-sm" />

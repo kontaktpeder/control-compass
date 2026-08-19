@@ -9,42 +9,42 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as AuthRouteImport } from './routes/auth'
+import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
+import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedOrgsRouteImport } from './routes/_authenticated/orgs'
 import { Route as AuthenticatedOOrgIdRouteImport } from './routes/_authenticated/o.$orgId'
 import { Route as AuthenticatedOOrgIdIndexRouteImport } from './routes/_authenticated/o.$orgId.index'
-import { Route as AuthenticatedOOrgIdAgreementsRouteImport } from './routes/_authenticated/o.$orgId.agreements'
-import { Route as AuthenticatedOOrgIdEvidenceRouteImport } from './routes/_authenticated/o.$orgId.evidence'
-import { Route as AuthenticatedOOrgIdObligationsRouteImport } from './routes/_authenticated/o.$orgId.obligations'
-import { Route as AuthenticatedOOrgIdSettingsRouteImport } from './routes/_authenticated/o.$orgId.settings'
-import { Route as AuthenticatedOOrgIdTasksRouteImport } from './routes/_authenticated/o.$orgId.tasks'
-import { Route as AuthenticatedOOrgIdWorkflowsRouteImport } from './routes/_authenticated/o.$orgId.workflows'
 import { Route as ApiPublicV1AgreementsRouteImport } from './routes/api/public/v1/agreements'
-import { Route as AuthenticatedOOrgIdAgreementsIndexRouteImport } from './routes/_authenticated/o.$orgId.agreements.index'
-import { Route as AuthenticatedOOrgIdAgreementsIdRouteImport } from './routes/_authenticated/o.$orgId.agreements.$id'
+import { Route as AuthenticatedOOrgIdWorkflowsRouteImport } from './routes/_authenticated/o.$orgId.workflows'
+import { Route as AuthenticatedOOrgIdTasksRouteImport } from './routes/_authenticated/o.$orgId.tasks'
+import { Route as AuthenticatedOOrgIdSettingsRouteImport } from './routes/_authenticated/o.$orgId.settings'
+import { Route as AuthenticatedOOrgIdObligationsRouteImport } from './routes/_authenticated/o.$orgId.obligations'
+import { Route as AuthenticatedOOrgIdEvidenceRouteImport } from './routes/_authenticated/o.$orgId.evidence'
+import { Route as AuthenticatedOOrgIdAgreementsRouteImport } from './routes/_authenticated/o.$orgId.agreements'
 import { Route as AuthenticatedOOrgIdObligationsIndexRouteImport } from './routes/_authenticated/o.$orgId.obligations.index'
-import { Route as AuthenticatedOOrgIdObligationsIdRouteImport } from './routes/_authenticated/o.$orgId.obligations.$id'
-import { Route as ApiPublicV1AgreementsIdRouteImport } from './routes/api/public/v1/agreements.$id'
-import { Route as ApiPublicV1ModuleHealthRouteImport } from './routes/api/public/v1/module.health'
-import { Route as ApiPublicV1ModuleInfoRouteImport } from './routes/api/public/v1/module.info'
-import { Route as ApiPublicV1ModuleOrganizationRouteImport } from './routes/api/public/v1/module.organization'
+import { Route as AuthenticatedOOrgIdAgreementsIndexRouteImport } from './routes/_authenticated/o.$orgId.agreements.index'
 import { Route as ApiPublicV1ModuleWidgetsRouteImport } from './routes/api/public/v1/module.widgets'
+import { Route as ApiPublicV1ModuleOrganizationRouteImport } from './routes/api/public/v1/module.organization'
+import { Route as ApiPublicV1ModuleInfoRouteImport } from './routes/api/public/v1/module.info'
+import { Route as ApiPublicV1ModuleHealthRouteImport } from './routes/api/public/v1/module.health'
+import { Route as ApiPublicV1AgreementsIdRouteImport } from './routes/api/public/v1/agreements.$id'
+import { Route as AuthenticatedOOrgIdObligationsIdRouteImport } from './routes/_authenticated/o.$orgId.obligations.$id'
+import { Route as AuthenticatedOOrgIdAgreementsIdRouteImport } from './routes/_authenticated/o.$orgId.agreements.$id'
 import { Route as ApiPublicV1ModuleOrganizationOrgIdRouteImport } from './routes/api/public/v1/module.organization.$orgId'
 
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const AuthRoute = AuthRouteImport.update({
+  id: '/auth',
+  path: '/auth',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRouteRoute = AuthenticatedRouteRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthRoute = AuthRouteImport.update({
-  id: '/auth',
-  path: '/auth',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedOrgsRoute = AuthenticatedOrgsRouteImport.update({
@@ -63,28 +63,15 @@ const AuthenticatedOOrgIdIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
-const AuthenticatedOOrgIdAgreementsRoute =
-  AuthenticatedOOrgIdAgreementsRouteImport.update({
-    id: '/agreements',
-    path: '/agreements',
-    getParentRoute: () => AuthenticatedOOrgIdRoute,
-  } as any)
-const AuthenticatedOOrgIdEvidenceRoute =
-  AuthenticatedOOrgIdEvidenceRouteImport.update({
-    id: '/evidence',
-    path: '/evidence',
-    getParentRoute: () => AuthenticatedOOrgIdRoute,
-  } as any)
-const AuthenticatedOOrgIdObligationsRoute =
-  AuthenticatedOOrgIdObligationsRouteImport.update({
-    id: '/obligations',
-    path: '/obligations',
-    getParentRoute: () => AuthenticatedOOrgIdRoute,
-  } as any)
-const AuthenticatedOOrgIdSettingsRoute =
-  AuthenticatedOOrgIdSettingsRouteImport.update({
-    id: '/settings',
-    path: '/settings',
+const ApiPublicV1AgreementsRoute = ApiPublicV1AgreementsRouteImport.update({
+  id: '/api/public/v1/agreements',
+  path: '/api/public/v1/agreements',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedOOrgIdWorkflowsRoute =
+  AuthenticatedOOrgIdWorkflowsRouteImport.update({
+    id: '/workflows',
+    path: '/workflows',
     getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
 const AuthenticatedOOrgIdTasksRoute =
@@ -93,28 +80,29 @@ const AuthenticatedOOrgIdTasksRoute =
     path: '/tasks',
     getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
-const AuthenticatedOOrgIdWorkflowsRoute =
-  AuthenticatedOOrgIdWorkflowsRouteImport.update({
-    id: '/workflows',
-    path: '/workflows',
+const AuthenticatedOOrgIdSettingsRoute =
+  AuthenticatedOOrgIdSettingsRouteImport.update({
+    id: '/settings',
+    path: '/settings',
     getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
-const ApiPublicV1AgreementsRoute = ApiPublicV1AgreementsRouteImport.update({
-  id: '/api/public/v1/agreements',
-  path: '/api/public/v1/agreements',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const AuthenticatedOOrgIdAgreementsIndexRoute =
-  AuthenticatedOOrgIdAgreementsIndexRouteImport.update({
-    id: '/',
-    path: '/',
-    getParentRoute: () => AuthenticatedOOrgIdAgreementsRoute,
+const AuthenticatedOOrgIdObligationsRoute =
+  AuthenticatedOOrgIdObligationsRouteImport.update({
+    id: '/obligations',
+    path: '/obligations',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
-const AuthenticatedOOrgIdAgreementsIdRoute =
-  AuthenticatedOOrgIdAgreementsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedOOrgIdAgreementsRoute,
+const AuthenticatedOOrgIdEvidenceRoute =
+  AuthenticatedOOrgIdEvidenceRouteImport.update({
+    id: '/evidence',
+    path: '/evidence',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
+  } as any)
+const AuthenticatedOOrgIdAgreementsRoute =
+  AuthenticatedOOrgIdAgreementsRouteImport.update({
+    id: '/agreements',
+    path: '/agreements',
+    getParentRoute: () => AuthenticatedOOrgIdRoute,
   } as any)
 const AuthenticatedOOrgIdObligationsIndexRoute =
   AuthenticatedOOrgIdObligationsIndexRouteImport.update({
@@ -122,38 +110,50 @@ const AuthenticatedOOrgIdObligationsIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedOOrgIdObligationsRoute,
   } as any)
-const AuthenticatedOOrgIdObligationsIdRoute =
-  AuthenticatedOOrgIdObligationsIdRouteImport.update({
-    id: '/$id',
-    path: '/$id',
-    getParentRoute: () => AuthenticatedOOrgIdObligationsRoute,
-  } as any)
-const ApiPublicV1AgreementsIdRoute = ApiPublicV1AgreementsIdRouteImport.update({
-  id: '/$id',
-  path: '/$id',
-  getParentRoute: () => ApiPublicV1AgreementsRoute,
-} as any)
-const ApiPublicV1ModuleHealthRoute = ApiPublicV1ModuleHealthRouteImport.update({
-  id: '/api/public/v1/module/health',
-  path: '/api/public/v1/module/health',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicV1ModuleInfoRoute = ApiPublicV1ModuleInfoRouteImport.update({
-  id: '/api/public/v1/module/info',
-  path: '/api/public/v1/module/info',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ApiPublicV1ModuleOrganizationRoute =
-  ApiPublicV1ModuleOrganizationRouteImport.update({
-    id: '/api/public/v1/module/organization',
-    path: '/api/public/v1/module/organization',
-    getParentRoute: () => rootRouteImport,
+const AuthenticatedOOrgIdAgreementsIndexRoute =
+  AuthenticatedOOrgIdAgreementsIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedOOrgIdAgreementsRoute,
   } as any)
 const ApiPublicV1ModuleWidgetsRoute =
   ApiPublicV1ModuleWidgetsRouteImport.update({
     id: '/api/public/v1/module/widgets',
     path: '/api/public/v1/module/widgets',
     getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicV1ModuleOrganizationRoute =
+  ApiPublicV1ModuleOrganizationRouteImport.update({
+    id: '/api/public/v1/module/organization',
+    path: '/api/public/v1/module/organization',
+    getParentRoute: () => rootRouteImport,
+  } as any)
+const ApiPublicV1ModuleInfoRoute = ApiPublicV1ModuleInfoRouteImport.update({
+  id: '/api/public/v1/module/info',
+  path: '/api/public/v1/module/info',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicV1ModuleHealthRoute = ApiPublicV1ModuleHealthRouteImport.update({
+  id: '/api/public/v1/module/health',
+  path: '/api/public/v1/module/health',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ApiPublicV1AgreementsIdRoute = ApiPublicV1AgreementsIdRouteImport.update({
+  id: '/$id',
+  path: '/$id',
+  getParentRoute: () => ApiPublicV1AgreementsRoute,
+} as any)
+const AuthenticatedOOrgIdObligationsIdRoute =
+  AuthenticatedOOrgIdObligationsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedOOrgIdObligationsRoute,
+  } as any)
+const AuthenticatedOOrgIdAgreementsIdRoute =
+  AuthenticatedOOrgIdAgreementsIdRouteImport.update({
+    id: '/$id',
+    path: '/$id',
+    getParentRoute: () => AuthenticatedOOrgIdAgreementsRoute,
   } as any)
 const ApiPublicV1ModuleOrganizationOrgIdRoute =
   ApiPublicV1ModuleOrganizationOrgIdRouteImport.update({
@@ -319,11 +319,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/auth': {
+      id: '/auth'
+      path: '/auth'
+      fullPath: '/auth'
+      preLoaderRoute: typeof AuthRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -333,11 +333,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/auth': {
-      id: '/auth'
-      path: '/auth'
-      fullPath: '/auth'
-      preLoaderRoute: typeof AuthRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/orgs': {
@@ -361,32 +361,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgIdIndexRouteImport
       parentRoute: typeof AuthenticatedOOrgIdRoute
     }
-    '/_authenticated/o/$orgId/agreements': {
-      id: '/_authenticated/o/$orgId/agreements'
-      path: '/agreements'
-      fullPath: '/o/$orgId/agreements'
-      preLoaderRoute: typeof AuthenticatedOOrgIdAgreementsRouteImport
-      parentRoute: typeof AuthenticatedOOrgIdRoute
+    '/api/public/v1/agreements': {
+      id: '/api/public/v1/agreements'
+      path: '/api/public/v1/agreements'
+      fullPath: '/api/public/v1/agreements'
+      preLoaderRoute: typeof ApiPublicV1AgreementsRouteImport
+      parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/o/$orgId/evidence': {
-      id: '/_authenticated/o/$orgId/evidence'
-      path: '/evidence'
-      fullPath: '/o/$orgId/evidence'
-      preLoaderRoute: typeof AuthenticatedOOrgIdEvidenceRouteImport
-      parentRoute: typeof AuthenticatedOOrgIdRoute
-    }
-    '/_authenticated/o/$orgId/obligations': {
-      id: '/_authenticated/o/$orgId/obligations'
-      path: '/obligations'
-      fullPath: '/o/$orgId/obligations'
-      preLoaderRoute: typeof AuthenticatedOOrgIdObligationsRouteImport
-      parentRoute: typeof AuthenticatedOOrgIdRoute
-    }
-    '/_authenticated/o/$orgId/settings': {
-      id: '/_authenticated/o/$orgId/settings'
-      path: '/settings'
-      fullPath: '/o/$orgId/settings'
-      preLoaderRoute: typeof AuthenticatedOOrgIdSettingsRouteImport
+    '/_authenticated/o/$orgId/workflows': {
+      id: '/_authenticated/o/$orgId/workflows'
+      path: '/workflows'
+      fullPath: '/o/$orgId/workflows'
+      preLoaderRoute: typeof AuthenticatedOOrgIdWorkflowsRouteImport
       parentRoute: typeof AuthenticatedOOrgIdRoute
     }
     '/_authenticated/o/$orgId/tasks': {
@@ -396,33 +382,33 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgIdTasksRouteImport
       parentRoute: typeof AuthenticatedOOrgIdRoute
     }
-    '/_authenticated/o/$orgId/workflows': {
-      id: '/_authenticated/o/$orgId/workflows'
-      path: '/workflows'
-      fullPath: '/o/$orgId/workflows'
-      preLoaderRoute: typeof AuthenticatedOOrgIdWorkflowsRouteImport
+    '/_authenticated/o/$orgId/settings': {
+      id: '/_authenticated/o/$orgId/settings'
+      path: '/settings'
+      fullPath: '/o/$orgId/settings'
+      preLoaderRoute: typeof AuthenticatedOOrgIdSettingsRouteImport
       parentRoute: typeof AuthenticatedOOrgIdRoute
     }
-    '/api/public/v1/agreements': {
-      id: '/api/public/v1/agreements'
-      path: '/api/public/v1/agreements'
-      fullPath: '/api/public/v1/agreements'
-      preLoaderRoute: typeof ApiPublicV1AgreementsRouteImport
-      parentRoute: typeof rootRouteImport
+    '/_authenticated/o/$orgId/obligations': {
+      id: '/_authenticated/o/$orgId/obligations'
+      path: '/obligations'
+      fullPath: '/o/$orgId/obligations'
+      preLoaderRoute: typeof AuthenticatedOOrgIdObligationsRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
     }
-    '/_authenticated/o/$orgId/agreements/': {
-      id: '/_authenticated/o/$orgId/agreements/'
-      path: '/'
-      fullPath: '/o/$orgId/agreements/'
-      preLoaderRoute: typeof AuthenticatedOOrgIdAgreementsIndexRouteImport
-      parentRoute: typeof AuthenticatedOOrgIdAgreementsRoute
+    '/_authenticated/o/$orgId/evidence': {
+      id: '/_authenticated/o/$orgId/evidence'
+      path: '/evidence'
+      fullPath: '/o/$orgId/evidence'
+      preLoaderRoute: typeof AuthenticatedOOrgIdEvidenceRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
     }
-    '/_authenticated/o/$orgId/agreements/$id': {
-      id: '/_authenticated/o/$orgId/agreements/$id'
-      path: '/$id'
-      fullPath: '/o/$orgId/agreements/$id'
-      preLoaderRoute: typeof AuthenticatedOOrgIdAgreementsIdRouteImport
-      parentRoute: typeof AuthenticatedOOrgIdAgreementsRoute
+    '/_authenticated/o/$orgId/agreements': {
+      id: '/_authenticated/o/$orgId/agreements'
+      path: '/agreements'
+      fullPath: '/o/$orgId/agreements'
+      preLoaderRoute: typeof AuthenticatedOOrgIdAgreementsRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdRoute
     }
     '/_authenticated/o/$orgId/obligations/': {
       id: '/_authenticated/o/$orgId/obligations/'
@@ -431,32 +417,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedOOrgIdObligationsIndexRouteImport
       parentRoute: typeof AuthenticatedOOrgIdObligationsRoute
     }
-    '/_authenticated/o/$orgId/obligations/$id': {
-      id: '/_authenticated/o/$orgId/obligations/$id'
-      path: '/$id'
-      fullPath: '/o/$orgId/obligations/$id'
-      preLoaderRoute: typeof AuthenticatedOOrgIdObligationsIdRouteImport
-      parentRoute: typeof AuthenticatedOOrgIdObligationsRoute
+    '/_authenticated/o/$orgId/agreements/': {
+      id: '/_authenticated/o/$orgId/agreements/'
+      path: '/'
+      fullPath: '/o/$orgId/agreements/'
+      preLoaderRoute: typeof AuthenticatedOOrgIdAgreementsIndexRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdAgreementsRoute
     }
-    '/api/public/v1/agreements/$id': {
-      id: '/api/public/v1/agreements/$id'
-      path: '/$id'
-      fullPath: '/api/public/v1/agreements/$id'
-      preLoaderRoute: typeof ApiPublicV1AgreementsIdRouteImport
-      parentRoute: typeof ApiPublicV1AgreementsRoute
-    }
-    '/api/public/v1/module/health': {
-      id: '/api/public/v1/module/health'
-      path: '/api/public/v1/module/health'
-      fullPath: '/api/public/v1/module/health'
-      preLoaderRoute: typeof ApiPublicV1ModuleHealthRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/api/public/v1/module/info': {
-      id: '/api/public/v1/module/info'
-      path: '/api/public/v1/module/info'
-      fullPath: '/api/public/v1/module/info'
-      preLoaderRoute: typeof ApiPublicV1ModuleInfoRouteImport
+    '/api/public/v1/module/widgets': {
+      id: '/api/public/v1/module/widgets'
+      path: '/api/public/v1/module/widgets'
+      fullPath: '/api/public/v1/module/widgets'
+      preLoaderRoute: typeof ApiPublicV1ModuleWidgetsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/api/public/v1/module/organization': {
@@ -466,12 +438,40 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ApiPublicV1ModuleOrganizationRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/api/public/v1/module/widgets': {
-      id: '/api/public/v1/module/widgets'
-      path: '/api/public/v1/module/widgets'
-      fullPath: '/api/public/v1/module/widgets'
-      preLoaderRoute: typeof ApiPublicV1ModuleWidgetsRouteImport
+    '/api/public/v1/module/info': {
+      id: '/api/public/v1/module/info'
+      path: '/api/public/v1/module/info'
+      fullPath: '/api/public/v1/module/info'
+      preLoaderRoute: typeof ApiPublicV1ModuleInfoRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/api/public/v1/module/health': {
+      id: '/api/public/v1/module/health'
+      path: '/api/public/v1/module/health'
+      fullPath: '/api/public/v1/module/health'
+      preLoaderRoute: typeof ApiPublicV1ModuleHealthRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/api/public/v1/agreements/$id': {
+      id: '/api/public/v1/agreements/$id'
+      path: '/$id'
+      fullPath: '/api/public/v1/agreements/$id'
+      preLoaderRoute: typeof ApiPublicV1AgreementsIdRouteImport
+      parentRoute: typeof ApiPublicV1AgreementsRoute
+    }
+    '/_authenticated/o/$orgId/obligations/$id': {
+      id: '/_authenticated/o/$orgId/obligations/$id'
+      path: '/$id'
+      fullPath: '/o/$orgId/obligations/$id'
+      preLoaderRoute: typeof AuthenticatedOOrgIdObligationsIdRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdObligationsRoute
+    }
+    '/_authenticated/o/$orgId/agreements/$id': {
+      id: '/_authenticated/o/$orgId/agreements/$id'
+      path: '/$id'
+      fullPath: '/o/$orgId/agreements/$id'
+      preLoaderRoute: typeof AuthenticatedOOrgIdAgreementsIdRouteImport
+      parentRoute: typeof AuthenticatedOOrgIdAgreementsRoute
     }
     '/api/public/v1/module/organization/$orgId': {
       id: '/api/public/v1/module/organization/$orgId'
@@ -598,3 +598,13 @@ const rootRouteChildren: RootRouteChildren = {
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
   ._addFileTypes<FileRouteTypes>()
+
+import type { getRouter } from './router.tsx'
+import type { startInstance } from './start.ts'
+declare module '@tanstack/react-start' {
+  interface Register {
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
+    config: Awaited<ReturnType<typeof startInstance.getOptions>>
+  }
+}

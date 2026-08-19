@@ -24,6 +24,9 @@ const SOURCE_NB: Record<string, string> = {
   "Companies Act (Aksjeloven)": "Aksjeloven",
   "Brønnøysund Register Centre": "Brønnøysundregistrene",
   "Accounting Act (Regnskapsloven)": "Regnskapsloven",
+  "Bookkeeping Act (Bokføringsloven)": "Bokføringsloven",
+  "VAT Act (Merverdiavgiftsloven)": "Merverdiavgiftsloven",
+  "Working Environment Act (Arbeidsmiljøloven)": "Arbeidsmiljøloven",
 };
 
 const OBLIGATION_NB: Record<string, ObligationCopy> = {
@@ -47,7 +50,7 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "Brønnøysund Registration (Foretaksregisteret)": {
     title: "Registrering i Foretaksregisteret",
-    why: "Selskapet må registreres i Foretaksregisteret innen tre måneder etter stiftelse.",
+    why: "Selskapet må registreres i Foretaksregisteret innen tre måneder etter stiftelse (aksjeloven § 2-18).",
     responsible: "Daglig leder",
     evidence: ["Firmaattest"],
   },
@@ -83,13 +86,13 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "Business Bank Account": {
     title: "Bedriftskonto",
-    why: "Egen bedriftskonto kreves for å holde selskapsmidler adskilt fra private midler og for å oppfylle regnskapsloven.",
+    why: "Egen bedriftskonto kreves for å holde selskapsmidler adskilt fra private midler og oppfylle bokføringsreglene.",
     responsible: "Daglig leder",
     evidence: ["Bekreftelse på bankkonto"],
   },
   "Accounting System Active": {
     title: "Regnskapssystem i bruk",
-    why: "Regnskapsloven krever et bokføringssystem fra dag én — transaksjoner skal registreres kronologisk.",
+    why: "Bokføringsloven krever et bokføringssystem fra dag én — transaksjoner skal registreres kronologisk.",
     responsible: "Regnskapsfører",
     evidence: ["Avtale eller faktura for regnskapssystem"],
   },
@@ -101,7 +104,7 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "First Board Minutes": {
     title: "Første styreprotokoll",
-    why: "Styrets beslutninger skal protokolleres og underskrives av de som deltok.",
+    why: "Styrets beslutninger skal protokolleres og underskrives av de som deltok (aksjeloven § 6-29).",
     responsible: "Styret",
     evidence: ["Signert styreprotokoll (PDF)"],
   },
@@ -119,13 +122,13 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
   },
   "Tax Registrations (MVA if applicable)": {
     title: "Skatteregistreringer (MVA ved behov)",
-    why: "MVA-registrering kreves når avgiftspliktig omsetning når 50 000 kroner i en 12-månedersperiode.",
+    why: "MVA-registrering kreves når avgiftspliktig omsetning når 50 000 kroner i en 12-månedersperiode (merverdiavgiftsloven § 2-1).",
     responsible: "Regnskapsfører",
     evidence: ["Registreringsbekreftelse"],
   },
   "HSE Policy (Internkontroll)": {
     title: "Internkontroll (HMS)",
-    why: "Selskaper med ansatte må ha et skriftlig internkontrollsystem for helse, miljø og sikkerhet.",
+    why: "Selskaper med ansatte må ha et skriftlig internkontrollsystem for helse, miljø og sikkerhet (arbeidsmiljøloven § 3-1).",
     responsible: "Daglig leder",
     evidence: ["Skriftlig HMS-policy"],
   },

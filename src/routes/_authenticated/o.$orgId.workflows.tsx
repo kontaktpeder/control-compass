@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { FileText, ChevronRight, ExternalLink, ExternalLink as LinkIcon } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { localizeObligation, localizeSourceAuthority } from "@/lib/playbook-i18n";
+import { legalBasisForObligation } from "@/lib/legal-sources";
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/workflows")({
   component: RegisterCompanyPage,
@@ -46,6 +47,8 @@ type ObligationRow = {
   evidence_requirements: string[] | null;
   responsible: string | null;
   is_required: boolean | null;
+  legal_citation: string | null;
+  legal_url: string | null;
   source: { authority: string | null; reference: string | null; url: string | null } | null;
 };
 
@@ -89,7 +92,7 @@ function RegisterCompanyPage() {
         supabase
           .from("obligations")
           .select(
-            "id, title, why, evidence_requirements, responsible, is_required, source:source_id(authority, reference, url)"
+            "id, title, why, evidence_requirements, responsible, is_required, legal_citation, legal_url, source:source_id(authority, reference, url)"
           )
           .eq("org_id", orgId)
           .order("is_required", { ascending: false })
@@ -112,8 +115,13 @@ function RegisterCompanyPage() {
 
   const obs = (data.data?.obs ?? []).map((o) => {
     const loc = localizeObligation(locale, o);
+    const legal = legalBasisForObligation(o.title, {
+      legal_citation: o.legal_citation,
+      legal_url: o.legal_url,
+    });
     return {
       ...loc,
+      legal,
       source: o.source
         ? { ...o.source, authority: localizeSourceAuthority(locale, o.source.authority) }
         : o.source,
@@ -227,15 +235,15 @@ function Section({
                         <span className="font-medium text-foreground/70">{t("workflow.responsible")}</span> {o.responsible}
                       </span>
                     )}
-                    {o.source?.url && (
+                    {(o.legal?.url ?? o.source?.url) && (
                       <a
-                        href={o.source.url}
+                        href={o.legal?.url ?? o.source!.url!}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 hover:text-foreground hover:underline"
                       >
                         <LinkIcon className="h-3 w-3" />
-                        {o.source.authority ?? t("workflow.source")}
+                        {o.legal?.citation ?? o.source?.authority ?? t("workflow.source")}
                       </a>
                     )}
                   </div>

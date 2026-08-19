@@ -464,6 +464,8 @@ export type Database = {
           framework_id: string | null
           id: string
           is_required: boolean
+          legal_citation: string | null
+          legal_url: string | null
           org_id: string
           playbook_step_id: string | null
           responsible: string | null
@@ -479,6 +481,8 @@ export type Database = {
           framework_id?: string | null
           id?: string
           is_required?: boolean
+          legal_citation?: string | null
+          legal_url?: string | null
           org_id: string
           playbook_step_id?: string | null
           responsible?: string | null
@@ -494,6 +498,8 @@ export type Database = {
           framework_id?: string | null
           id?: string
           is_required?: boolean
+          legal_citation?: string | null
+          legal_url?: string | null
           org_id?: string
           playbook_step_id?: string | null
           responsible?: string | null
