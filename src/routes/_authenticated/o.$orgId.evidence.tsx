@@ -1,8 +1,10 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useRef, useState } from "react";
+import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
+import { classifyEvidence } from "@/lib/ai.functions";
 import { DocumentUpload, type DocumentUploadHandle } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { DocumentMetaSheet } from "@/components/document-meta-sheet";
@@ -74,6 +76,7 @@ function DocumentsPage() {
   const replaceUploadRef = useRef<DocumentUploadHandle>(null);
   const replaceAssignmentIdRef = useRef<string | null>(null);
   const replaceHintIdRef = useRef<string | null>(null);
+  const classify = useServerFn(classifyEvidence);
 
   const setRegisterMode = (on: boolean) => {
     void navigate({
@@ -109,7 +112,9 @@ function DocumentsPage() {
       const { data: profiles } = memberIds.length
         ? await supabase.from("profiles").select("id, full_name").in("id", memberIds)
         : { data: [] as Array<{ id: string; full_name: string | null }> };
-      const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name?.trim() || "Unnamed"]));
+      const nameById = new Map(
+        (profiles ?? []).map((p) => [p.id, p.full_name?.trim() || "Unnamed"]),
+      );
 
       const obById = new Map((obs.data ?? []).map((o) => [o.id, { id: o.id, title: o.title }]));
       const assignmentByEv = new Map<string, AssignmentRow>();
@@ -119,7 +124,7 @@ function DocumentsPage() {
 
       return (ev.data ?? []).map((row) => {
         const assignment = assignmentByEv.get(row.id) ?? null;
-        const obligation = assignment ? obById.get(assignment.obligation_id) ?? null : null;
+        const obligation = assignment ? (obById.get(assignment.obligation_id) ?? null) : null;
         return {
           id: row.id,
           kind: "file" as const,
@@ -128,16 +133,20 @@ function DocumentsPage() {
           aiCategory: isDocumentCategory(row.ai_category) ? row.ai_category : null,
           aiCategoryConfidence: row.ai_category_confidence,
           ownerUserId: row.responsible_user_id,
-          ownerName: row.responsible_user_id ? nameById.get(row.responsible_user_id) ?? null : null,
+          ownerName: row.responsible_user_id
+            ? (nameById.get(row.responsible_user_id) ?? null)
+            : null,
           summary: row.ai_summary,
           updatedAt: row.created_at,
           reviewDueAt: row.review_due_at,
           filePath: row.file_path,
           mimeType: row.mime_type,
           sizeBytes: row.size_bytes,
-          documentType: assignment?.document_type ?? assignment?.ai_document_type ?? row.primary_document_type,
+          documentType:
+            assignment?.document_type ?? assignment?.ai_document_type ?? row.primary_document_type,
           purpose: assignment?.purpose ?? assignment?.ai_purpose ?? row.primary_purpose,
-          typeConfidence: assignment?.ai_document_type_confidence ?? row.primary_document_type_confidence,
+          typeConfidence:
+            assignment?.ai_document_type_confidence ?? row.primary_document_type_confidence,
           documentTypeCandidates: (row.document_type_candidates as Candidate[] | null) ?? null,
           purposeCandidates: (row.purpose_candidates as Candidate[] | null) ?? null,
           obligation,
@@ -172,7 +181,10 @@ function DocumentsPage() {
     [documents.data],
   );
 
-  const byId = useMemo(() => new Map((documents.data ?? []).map((d) => [d.id, d])), [documents.data]);
+  const byId = useMemo(
+    () => new Map((documents.data ?? []).map((d) => [d.id, d])),
+    [documents.data],
+  );
 
   const openFile = async (path: string) => {
     const { data, error } = await supabase.storage.from("evidence").createSignedUrl(path, 60);
@@ -207,6 +219,25 @@ function DocumentsPage() {
     });
   };
 
+  const interpretWithAi = async (d: LibraryItem) => {
+    toast.info(t("upload.understanding"));
+    try {
+      await classify({
+        data: {
+          evidence_id: d.id,
+          hint_obligation_id: d.obligation?.id ?? null,
+          upload_context: "library",
+          force_ai: true,
+        },
+      });
+      toast.success(t("library.interpreted"));
+      await qc.invalidateQueries({ queryKey: ["documents", orgId] });
+      await qc.invalidateQueries({ queryKey: ["register-company", orgId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : String(e));
+    }
+  };
+
   const deleteIds = async (ids: string[]) => {
     const rows = ids.map((id) => byId.get(id)).filter((d): d is LibraryItem => !!d);
     const paths = rows.map((r) => r.filePath).filter((p): p is string => !!p);
@@ -230,9 +261,18 @@ function DocumentsPage() {
       actions.push({ id: "open", label: t("common.view"), onSelect: () => openFile(d.filePath!) });
     }
     if (d.assignment?.status === "needs_review") {
-      actions.push({ id: "review", label: t("library.reviewAssignment"), onSelect: () => openReview(d) });
+      actions.push({
+        id: "review",
+        label: t("library.reviewAssignment"),
+        onSelect: () => openReview(d),
+      });
     }
     actions.push({ id: "edit", label: t("common.edit"), onSelect: () => setEditingId(d.id) });
+    actions.push({
+      id: "interpret",
+      label: t("library.interpretAi"),
+      onSelect: () => interpretWithAi(d),
+    });
     if (d.assignment) {
       actions.push({
         id: "replace",
@@ -264,9 +304,7 @@ function DocumentsPage() {
         </div>
       }
     >
-      {registerMode && (
-        <RegisterCompanyGuide orgId={orgId} onReview={setReviewing} />
-      )}
+      {registerMode && <RegisterCompanyGuide orgId={orgId} onReview={setReviewing} />}
 
       {documents.isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
@@ -303,7 +341,11 @@ function DocumentsPage() {
                 </Button>
               )}
               {selectedCount > 0 && (
-                <Button size="sm" variant="destructive" onClick={() => setPendingDelete([...selectedIds])}>
+                <Button
+                  size="sm"
+                  variant="destructive"
+                  onClick={() => setPendingDelete([...selectedIds])}
+                >
                   {t("common.delete")} · {selectedCount}
                 </Button>
               )}

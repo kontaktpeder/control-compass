@@ -4,13 +4,26 @@ import { generateObject, NoObjectGeneratedError } from "ai";
 import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 import { createLovableAiGatewayProvider, requireLovableApiKey } from "./ai-gateway.server";
 import { DOCUMENT_CATEGORY_IDS, isDocumentCategory, type DocumentCategory } from "@/lib/library";
+import {
+  fallbackRouteFromTitle,
+  matchObligationsByFilename,
+  routeForTitle,
+  routingSummary,
+  type ObligationRoute,
+} from "@/lib/document-routing";
 
 function tryParseJson(raw: string | undefined): any {
   if (!raw) return null;
-  try { return JSON.parse(raw); } catch {
+  try {
+    return JSON.parse(raw);
+  } catch {
     const m = raw.match(/\{[\s\S]*\}/);
     if (!m) return null;
-    try { return JSON.parse(m[0]); } catch { return null; }
+    try {
+      return JSON.parse(m[0]);
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -29,19 +42,112 @@ export const CLASSIFICATION_STATUSES = [
   "unknown",
 ] as const;
 
-type ClassificationStatus = typeof CLASSIFICATION_STATUSES[number];
+type ClassificationStatus = (typeof CLASSIFICATION_STATUSES)[number];
+
+type AssignmentTarget = {
+  obligationId: string;
+  documentType: string;
+  purpose: string;
+  summary: string;
+  reasoning: string;
+  confidence: number;
+  prefillType: boolean;
+};
+
+async function syncEvidenceAssignments(
+  supabase: { from: (table: string) => any },
+  args: {
+    orgId: string;
+    evidenceId: string;
+    hintOb: string | null;
+    targets: AssignmentTarget[];
+  },
+): Promise<string[]> {
+  const candidateArr = args.targets.map((t) => t.obligationId);
+  const { data: existingLinks } = candidateArr.length
+    ? await supabase
+        .from("evidence_links")
+        .select("id, obligation_id, evidence_id")
+        .in("obligation_id", candidateArr)
+    : { data: [] as Array<{ id: string; obligation_id: string; evidence_id: string }> };
+
+  const existingByOb = new Map<string, { id: string; evidence_id: string }>();
+  for (const l of existingLinks ?? []) {
+    existingByOb.set(l.obligation_id, { id: l.id, evidence_id: l.evidence_id });
+  }
+
+  const linked: string[] = [];
+  for (const t of args.targets) {
+    const patch: Record<string, unknown> = {
+      ai_document_type: t.documentType,
+      ai_document_type_confidence: t.confidence,
+      ai_purpose: t.purpose,
+      ai_purpose_confidence: t.confidence,
+      ai_summary: t.summary,
+      ai_reasoning_full: t.reasoning,
+      relevance: t.confidence,
+      ai_reasoning: t.reasoning,
+    };
+    if (t.prefillType) {
+      patch.document_type = t.documentType;
+      patch.purpose = t.purpose;
+    }
+
+    const existing = existingByOb.get(t.obligationId);
+    const isHint = t.obligationId === args.hintOb;
+    if (existing) {
+      if (existing.evidence_id === args.evidenceId) {
+        await supabase
+          .from("evidence_links")
+          .update(patch as never)
+          .eq("id", existing.id);
+        linked.push(t.obligationId);
+      } else if (isHint) {
+        await supabase
+          .from("evidence_links")
+          .update({
+            ...patch,
+            evidence_id: args.evidenceId,
+            status: "needs_review",
+            verified_by: null,
+            verified_at: null,
+          } as never)
+          .eq("id", existing.id);
+        linked.push(t.obligationId);
+      }
+    } else {
+      const { error: insErr } = await supabase.from("evidence_links").insert({
+        org_id: args.orgId,
+        evidence_id: args.evidenceId,
+        obligation_id: t.obligationId,
+        status: "needs_review",
+        ...patch,
+      } as never);
+      if (!insErr) linked.push(t.obligationId);
+    }
+  }
+  return linked;
+}
+
+function routeForObligationTitle(title: string): ObligationRoute {
+  return routeForTitle(title) ?? fallbackRouteFromTitle(title);
+}
 
 // --- classifyEvidence -------------------------------------------------------
 export const classifyEvidence = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({
-      evidence_id: z.string().uuid(),
-      // Optional hint: which obligation the user was working on when uploading.
-      hint_obligation_id: z.string().uuid().nullish(),
-      // Where the upload originated. Workflow uploads always link to the hint.
-      upload_context: z.enum(["workflow", "library"]).optional().default("library"),
-    }).parse(input)
+    z
+      .object({
+        evidence_id: z.string().uuid(),
+        // Optional hint: which obligation the user was working on when uploading.
+        hint_obligation_id: z.string().uuid().nullish(),
+        // Where the upload originated. Workflow uploads always link to the hint.
+        upload_context: z.enum(["workflow", "library"]).optional().default("library"),
+        // Skip filename/slot routing and send the file to the model.
+        force_ai: z.boolean().optional(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -58,6 +164,117 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       .select("id, title, why, evidence_requirements")
       .eq("org_id", ev.org_id);
 
+    const validIds = new Set((obligations ?? []).map((o) => o.id));
+    const hintOb =
+      data.hint_obligation_id && validIds.has(data.hint_obligation_id)
+        ? data.hint_obligation_id
+        : null;
+    const filenameMatches = matchObligationsByFilename(ev.file_name, obligations ?? []);
+    const useRouting = !data.force_ai && (!!hintOb || filenameMatches.length > 0);
+
+    if (useRouting) {
+      const byId = new Map((obligations ?? []).map((o) => [o.id, o]));
+      const hintTitle = hintOb ? (byId.get(hintOb)?.title ?? null) : null;
+      const { summary, reasoning } = routingSummary({ hintTitle, matches: filenameMatches });
+
+      const orderedIds: string[] = [];
+      if (hintOb) orderedIds.push(hintOb);
+      for (const m of filenameMatches) {
+        if (!orderedIds.includes(m.obligationId)) orderedIds.push(m.obligationId);
+      }
+
+      const matchByOb = new Map(filenameMatches.map((m) => [m.obligationId, m]));
+      const targets: AssignmentTarget[] = [];
+      for (const obId of orderedIds) {
+        const title = byId.get(obId)?.title ?? "Document";
+        const route = matchByOb.get(obId)?.route ?? routeForObligationTitle(title);
+        const keys = matchByOb.get(obId)?.matchedKeywords ?? [];
+        const why =
+          hintOb === obId
+            ? keys.length
+              ? `${reasoning} This slot: ${route.documentType}.`
+              : `Filed from the ${title} upload slot.`
+            : `Filename matched: ${keys.join(", ") || route.documentType}.`;
+        targets.push({
+          obligationId: obId,
+          documentType: route.documentType,
+          purpose: route.purpose,
+          summary,
+          reasoning: why,
+          confidence: hintOb === obId ? 1 : 0.9,
+          prefillType: true,
+        });
+      }
+
+      const primaryRoute: ObligationRoute = hintOb
+        ? routeForObligationTitle(hintTitle ?? "Document")
+        : (filenameMatches[0]?.route ?? fallbackRouteFromTitle("Document"));
+      const primaryType = primaryRoute.documentType;
+      const primaryPurpose = primaryRoute.purpose;
+      const primaryCategory: DocumentCategory | null = primaryRoute.category;
+
+      const docCandidates = targets.map((t, i) => ({
+        label: t.documentType,
+        confidence: i === 0 ? 1 : 0.85,
+      }));
+      const purposeCandidates = [
+        ...new Map(
+          targets.map((t) => [
+            t.purpose,
+            {
+              label: t.purpose,
+              confidence: t.confidence,
+            },
+          ]),
+        ).values(),
+      ];
+
+      await supabase
+        .from("evidence")
+        .update({
+          ai_summary: summary,
+          ai_confidence: hintOb ? 1 : 0.9,
+          primary_document_type: primaryType,
+          primary_document_type_confidence: hintOb ? 1 : 0.9,
+          document_type_candidates: docCandidates as unknown as any,
+          primary_purpose: primaryPurpose,
+          primary_purpose_confidence: hintOb ? 1 : 0.9,
+          purpose_candidates: purposeCandidates as unknown as any,
+          document_type: primaryType,
+          document_type_confidence: hintOb ? 1 : 0.9,
+          purpose: primaryPurpose,
+          classification_status: "direct_evidence" satisfies ClassificationStatus,
+          ai_alternatives: docCandidates as unknown as any,
+          ai_reasoning: reasoning,
+          ai_category: primaryCategory,
+          ai_category_confidence: primaryCategory ? 1 : null,
+          ...(ev.category ? {} : { category: primaryCategory }),
+        } as any)
+        .eq("id", ev.id);
+
+      const linkedArray = await syncEvidenceAssignments(supabase, {
+        orgId: ev.org_id,
+        evidenceId: ev.id,
+        hintOb,
+        targets,
+      });
+
+      return {
+        primary_document_type: primaryType,
+        primary_document_type_confidence: hintOb ? 1 : 0.9,
+        primary_purpose: primaryPurpose,
+        primary_purpose_confidence: hintOb ? 1 : 0.9,
+        document_type_candidates: docCandidates,
+        purpose_candidates: purposeCandidates,
+        classification_status: "direct_evidence" as ClassificationStatus,
+        summary,
+        linked_obligation_ids: linkedArray,
+        category: ev.category ?? primaryCategory,
+        ai_category: primaryCategory,
+        used_ai: false,
+      };
+    }
+
     const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
     let fileBase64: string | null = null;
     try {
@@ -66,21 +283,25 @@ export const classifyEvidence = createServerFn({ method: "POST" })
         const buf = Buffer.from(await file.arrayBuffer());
         if (buf.byteLength < 4_000_000) fileBase64 = buf.toString("base64");
       }
-    } catch { /* fall through */ }
+    } catch {
+      /* fall through */
+    }
 
     const provider = createLovableAiGatewayProvider(requireLovableApiKey());
     const model = provider(MODEL);
     const isImage = (ev.mime_type ?? "").startsWith("image/");
     const isPdf = (ev.mime_type ?? "") === "application/pdf";
 
-    const attach = <T,>(base: T[]): T[] => {
+    const attach = <T>(base: T[]): T[] => {
       const out = [...base] as any[];
       if (fileBase64 && isImage) {
         out.push({ type: "image", image: `data:${ev.mime_type};base64,${fileBase64}` });
       } else if (fileBase64 && isPdf) {
         out.push({
-          type: "file", data: fileBase64,
-          mediaType: "application/pdf", filename: ev.file_name,
+          type: "file",
+          data: fileBase64,
+          mediaType: "application/pdf",
+          filename: ev.file_name,
         });
       }
       return out as T[];
@@ -114,47 +335,51 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       const gen = await generateObject({
         model,
         schema: identifySchema,
-        messages: [{
-          role: "user",
-          content: attach([{
-            type: "text" as const,
-            text: [
-              "You are analysing an uploaded organizational document.",
-              "",
-              "ALWAYS respond in English. Every `label` and the summary MUST be written in English,",
-              "even when the source document is in another language (e.g. Norwegian \"Vedtekter\" →",
-              "label \"Articles of Association\"). Do not return labels in the source language.",
-              "",
-              "Return 1-3 candidate document types, each as { label, confidence }.",
-              "Each `label` MUST be a short human-readable English string, e.g. \"Founders' Agreement\",",
-              "\"Articles of Association\", \"Board Minutes\", \"Employment Contract\",",
-              "\"Insurance Policy\", \"Share Capital Confirmation\", \"HACCP Procedure\",",
-              "\"NDA\", \"Invoice\", \"Receipt\". NEVER put JSON, arrays, or objects inside `label`.",
-              "Order candidates from highest to lowest confidence (0-1).",
-              "",
-              "Also return 1-3 purpose candidates the same way: { label, confidence }.",
-              "Each purpose label is a short human-readable English phrase, e.g. \"Corporate Governance\",",
-              "\"Ownership\", \"Accounting\", \"Employment\", \"Insurance\", \"Food Safety\",",
-              "\"Privacy\", \"Board Governance\", \"Operational Documentation\",",
-              "\"Supplier Management\", \"Customer Management\", \"Investment\".",
-              "",
-              "Also return a library category (exactly one of: operations, finance, contracts, hr, reference)",
-              "and category_confidence (0-1).",
-              "- operations: production, HACCP, suppliers, day-to-day operations",
-              "- finance: accounting, invoices, tax, investment",
-              "- contracts: commercial agreements, NDAs, shareholder/founder agreements",
-              "- hr: employment, personnel, staffing",
-              "- reference: models, templates, knowledge, historical material",
-              "Category is independent of legal obligations — every document gets a home.",
-              "",
-              "Do NOT try to match against legal obligations at this stage.",
-              "Also return a one-sentence plain-language English summary of the document contents.",
-              "",
-              `Filename: ${ev.file_name}`,
-              `MIME: ${ev.mime_type ?? "unknown"}`,
-            ].join("\n"),
-          }]),
-        }],
+        messages: [
+          {
+            role: "user",
+            content: attach([
+              {
+                type: "text" as const,
+                text: [
+                  "You are analysing an uploaded organizational document.",
+                  "",
+                  "ALWAYS respond in English. Every `label` and the summary MUST be written in English,",
+                  'even when the source document is in another language (e.g. Norwegian "Vedtekter" →',
+                  'label "Articles of Association"). Do not return labels in the source language.',
+                  "",
+                  "Return 1-3 candidate document types, each as { label, confidence }.",
+                  'Each `label` MUST be a short human-readable English string, e.g. "Founders\' Agreement",',
+                  '"Articles of Association", "Board Minutes", "Employment Contract",',
+                  '"Insurance Policy", "Share Capital Confirmation", "HACCP Procedure",',
+                  '"NDA", "Invoice", "Receipt". NEVER put JSON, arrays, or objects inside `label`.',
+                  "Order candidates from highest to lowest confidence (0-1).",
+                  "",
+                  "Also return 1-3 purpose candidates the same way: { label, confidence }.",
+                  'Each purpose label is a short human-readable English phrase, e.g. "Corporate Governance",',
+                  '"Ownership", "Accounting", "Employment", "Insurance", "Food Safety",',
+                  '"Privacy", "Board Governance", "Operational Documentation",',
+                  '"Supplier Management", "Customer Management", "Investment".',
+                  "",
+                  "Also return a library category (exactly one of: operations, finance, contracts, hr, reference)",
+                  "and category_confidence (0-1).",
+                  "- operations: production, HACCP, suppliers, day-to-day operations",
+                  "- finance: accounting, invoices, tax, investment",
+                  "- contracts: commercial agreements, NDAs, shareholder/founder agreements",
+                  "- hr: employment, personnel, staffing",
+                  "- reference: models, templates, knowledge, historical material",
+                  "Category is independent of legal obligations — every document gets a home.",
+                  "",
+                  "Do NOT try to match against legal obligations at this stage.",
+                  "Also return a one-sentence plain-language English summary of the document contents.",
+                  "",
+                  `Filename: ${ev.file_name}`,
+                  `MIME: ${ev.mime_type ?? "unknown"}`,
+                ].join("\n"),
+              },
+            ]),
+          },
+        ],
       });
       identified = gen.object;
     } catch (e) {
@@ -162,10 +387,15 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       const parsed = tryParseJson(raw);
       if (parsed) {
         identified = {
-          document_type_candidates: Array.isArray(parsed.document_type_candidates) ? parsed.document_type_candidates : [],
-          purpose_candidates: Array.isArray(parsed.purpose_candidates) ? parsed.purpose_candidates : [],
+          document_type_candidates: Array.isArray(parsed.document_type_candidates)
+            ? parsed.document_type_candidates
+            : [],
+          purpose_candidates: Array.isArray(parsed.purpose_candidates)
+            ? parsed.purpose_candidates
+            : [],
           category: isDocumentCategory(parsed.category) ? parsed.category : "reference",
-          category_confidence: typeof parsed.category_confidence === "number" ? parsed.category_confidence : 0,
+          category_confidence:
+            typeof parsed.category_confidence === "number" ? parsed.category_confidence : 0,
           summary: parsed.summary ?? identified.summary,
           reasoning: parsed.reasoning ?? (e instanceof Error ? e.message : "identification failed"),
         };
@@ -181,11 +411,16 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       for (const c of arr) {
         if (!c || typeof c !== "object") continue;
         const anyC = c as Record<string, unknown>;
-        const label = typeof anyC.label === "string" ? anyC.label
-          : typeof anyC.document_type === "string" ? anyC.document_type
-          : typeof anyC.purpose === "string" ? anyC.purpose
-          : typeof anyC.type === "string" ? anyC.type
-          : null;
+        const label =
+          typeof anyC.label === "string"
+            ? anyC.label
+            : typeof anyC.document_type === "string"
+              ? anyC.document_type
+              : typeof anyC.purpose === "string"
+                ? anyC.purpose
+                : typeof anyC.type === "string"
+                  ? anyC.type
+                  : null;
         if (!label || label.trim().startsWith("[") || label.trim().startsWith("{")) continue;
         const conf = typeof anyC.confidence === "number" ? anyC.confidence : 0;
         out.push({ label: label.trim(), confidence: Math.max(0, Math.min(1, conf)) });
@@ -201,7 +436,10 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
     // --- Stage 3: find related obligations ---
     const obligationsList = (obligations ?? [])
-      .map((o) => `- ${o.id} :: ${o.title} — needs: ${(o.evidence_requirements ?? []).join(", ") || "n/a"}`)
+      .map(
+        (o) =>
+          `- ${o.id} :: ${o.title} — needs: ${(o.evidence_requirements ?? []).join(", ") || "n/a"}`,
+      )
       .join("\n");
 
     const matchSchema = z.object({
@@ -254,14 +492,20 @@ export const classifyEvidence = createServerFn({ method: "POST" })
         });
         matched = gen.object;
       } catch (e) {
-        const raw = NoObjectGeneratedError.isInstance(e) ? (e as { text?: string }).text : undefined;
+        const raw = NoObjectGeneratedError.isInstance(e)
+          ? (e as { text?: string }).text
+          : undefined;
         const parsed = tryParseJson(raw);
         if (parsed) {
           matched = {
             supported_obligation_ids: Array.isArray(parsed.supported_obligation_ids)
-              ? parsed.supported_obligation_ids.filter((x: unknown) => typeof x === "string") : [],
-            relationship: (matchSchema.shape.relationship.options as readonly string[]).includes(parsed.relationship)
-              ? parsed.relationship : "needs_review",
+              ? parsed.supported_obligation_ids.filter((x: unknown) => typeof x === "string")
+              : [],
+            relationship: (matchSchema.shape.relationship.options as readonly string[]).includes(
+              parsed.relationship,
+            )
+              ? parsed.relationship
+              : "needs_review",
             reasoning: parsed.reasoning ?? (e instanceof Error ? e.message : "matching failed"),
           };
         } else {
@@ -279,20 +523,20 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       };
     }
 
-    const validIds = new Set((obligations ?? []).map((o) => o.id));
     const linkedIds = matched.supported_obligation_ids.filter((id) => validIds.has(id));
 
     // Classification status (used for the relationship badge on the card)
     let classification_status: ClassificationStatus = matched.relationship;
-    if (linkedIds.length === 0 && (classification_status === "direct_evidence" || classification_status === "supporting_evidence")) {
+    if (
+      linkedIds.length === 0 &&
+      (classification_status === "direct_evidence" ||
+        classification_status === "supporting_evidence")
+    ) {
       classification_status = "needs_review";
     }
     if ((primaryDoc?.confidence ?? 0) < 0.3 && classification_status !== "no_match") {
       classification_status = "needs_review";
     }
-
-
-
 
     const suggestedCategory: DocumentCategory | null =
       identified.category_confidence >= 0.3 && isDocumentCategory(identified.category)
@@ -301,26 +545,29 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
     // --- Stage 4: persist AI metadata on evidence (candidates only, no product status) ---
     // Never overwrite a human-set category; always record the AI suggestion.
-    await supabase.from("evidence").update({
-      ai_summary: identified.summary,
-      ai_confidence: primaryDoc?.confidence ?? 0,
-      primary_document_type: primaryDoc?.label ?? null,
-      primary_document_type_confidence: primaryDoc?.confidence ?? null,
-      document_type_candidates: docCandidates as unknown as any,
-      primary_purpose: primaryPurpose?.label ?? null,
-      primary_purpose_confidence: primaryPurpose?.confidence ?? null,
-      purpose_candidates: purposeCandidates as unknown as any,
-      // Legacy columns kept in sync but no longer read by UI.
-      document_type: primaryDoc?.label ?? null,
-      document_type_confidence: primaryDoc?.confidence ?? null,
-      purpose: primaryPurpose?.label ?? null,
-      classification_status,
-      ai_alternatives: docCandidates as unknown as any,
-      ai_reasoning: `${identified.reasoning}\n\nRelationship: ${matched.reasoning}`,
-      ai_category: suggestedCategory,
-      ai_category_confidence: identified.category_confidence || null,
-      ...(ev.category ? {} : { category: suggestedCategory }),
-    } as any).eq("id", ev.id);
+    await supabase
+      .from("evidence")
+      .update({
+        ai_summary: identified.summary,
+        ai_confidence: primaryDoc?.confidence ?? 0,
+        primary_document_type: primaryDoc?.label ?? null,
+        primary_document_type_confidence: primaryDoc?.confidence ?? null,
+        document_type_candidates: docCandidates as unknown as any,
+        primary_purpose: primaryPurpose?.label ?? null,
+        primary_purpose_confidence: primaryPurpose?.confidence ?? null,
+        purpose_candidates: purposeCandidates as unknown as any,
+        // Legacy columns kept in sync but no longer read by UI.
+        document_type: primaryDoc?.label ?? null,
+        document_type_confidence: primaryDoc?.confidence ?? null,
+        purpose: primaryPurpose?.label ?? null,
+        classification_status,
+        ai_alternatives: docCandidates as unknown as any,
+        ai_reasoning: `${identified.reasoning}\n\nRelationship: ${matched.reasoning}`,
+        ai_category: suggestedCategory,
+        ai_category_confidence: identified.category_confidence || null,
+        ...(ev.category ? {} : { category: suggestedCategory }),
+      } as any)
+      .eq("id", ev.id);
 
     // --- Stage 5: assignment updates ---------------------------------------
     // Rules:
@@ -330,13 +577,6 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     //    obligation has no assignment yet. Never silently replace another
     //    document a human already put on that obligation.
     //  - AI never sets status = verified.
-    const hintOb =
-      data.upload_context === "workflow" &&
-      data.hint_obligation_id &&
-      validIds.has(data.hint_obligation_id)
-        ? data.hint_obligation_id
-        : null;
-
     const candidateObs = new Set<string>(linkedIds);
     if (hintOb) candidateObs.add(hintOb);
     const candidateArr = Array.from(candidateObs);
@@ -421,9 +661,9 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       linked_obligation_ids: linkedArray,
       category: ev.category ?? suggestedCategory,
       ai_category: suggestedCategory,
+      used_ai: true,
     };
   });
-
 
 // --- assessObligation -------------------------------------------------------
 
@@ -491,7 +731,13 @@ export const assessObligation = createServerFn({ method: "POST" })
     } catch (e) {
       const raw = NoObjectGeneratedError.isInstance(e) ? (e as { text?: string }).text : undefined;
       const parsed = tryParseJson(raw);
-      const allowed = ["satisfied", "partially_satisfied", "missing", "needs_review", "unknown"] as const;
+      const allowed = [
+        "satisfied",
+        "partially_satisfied",
+        "missing",
+        "needs_review",
+        "unknown",
+      ] as const;
       assessment = {
         status: (allowed as readonly string[]).includes(parsed?.status)
           ? parsed.status
@@ -588,11 +834,13 @@ export const generateTasks = createServerFn({ method: "POST" })
 export const confirmEvidenceField = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({
-      evidence_id: z.string().uuid(),
-      field: z.enum(["document_type", "purpose"]),
-      value: z.string().min(1),
-    }).parse(input)
+    z
+      .object({
+        evidence_id: z.string().uuid(),
+        field: z.enum(["document_type", "purpose"]),
+        value: z.string().min(1),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -615,7 +863,9 @@ export const confirmEvidenceField = createServerFn({ method: "POST" })
     // Read current state to decide whether both dimensions are now confirmed.
     const { data: current } = await supabase
       .from("evidence")
-      .select("primary_document_type, primary_document_type_confidence, primary_purpose, primary_purpose_confidence, review_status")
+      .select(
+        "primary_document_type, primary_document_type_confidence, primary_purpose, primary_purpose_confidence, review_status",
+      )
       .eq("id", data.evidence_id)
       .single();
 
@@ -626,7 +876,10 @@ export const confirmEvidenceField = createServerFn({ method: "POST" })
       patch.review_status = "confirmed";
     }
 
-    await supabase.from("evidence").update(patch as any).eq("id", data.evidence_id);
+    await supabase
+      .from("evidence")
+      .update(patch as any)
+      .eq("id", data.evidence_id);
     return { ok: true };
   });
 
@@ -634,17 +887,20 @@ export const confirmEvidenceField = createServerFn({ method: "POST" })
 export const confirmDocumentType = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({ evidence_id: z.string().uuid(), document_type: z.string().min(1) }).parse(input)
+    z.object({ evidence_id: z.string().uuid(), document_type: z.string().min(1) }).parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    await supabase.from("evidence").update({
-      primary_document_type: data.document_type,
-      primary_document_type_confidence: 1,
-      document_type: data.document_type,
-      document_type_confidence: 1,
-      review_status: "confirmed",
-    } as any).eq("id", data.evidence_id);
+    await supabase
+      .from("evidence")
+      .update({
+        primary_document_type: data.document_type,
+        primary_document_type_confidence: 1,
+        document_type: data.document_type,
+        document_type_confidence: 1,
+        review_status: "confirmed",
+      } as any)
+      .eq("id", data.evidence_id);
     return { ok: true };
   });
 
@@ -653,11 +909,13 @@ export const confirmDocumentType = createServerFn({ method: "POST" })
 export const confirmDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({
-      evidence_id: z.string().uuid(),
-      document_type: z.string().min(1).nullish(),
-      purpose: z.string().min(1).nullish(),
-    }).parse(input)
+    z
+      .object({
+        evidence_id: z.string().uuid(),
+        document_type: z.string().min(1).nullish(),
+        purpose: z.string().min(1).nullish(),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
@@ -675,7 +933,10 @@ export const confirmDocument = createServerFn({ method: "POST" })
       patch.primary_purpose_confidence = 1;
       patch.purpose = v;
     }
-    await supabase.from("evidence").update(patch as any).eq("id", data.evidence_id);
+    await supabase
+      .from("evidence")
+      .update(patch as any)
+      .eq("id", data.evidence_id);
     return { ok: true };
   });
 
@@ -684,19 +945,23 @@ export const confirmDocument = createServerFn({ method: "POST" })
 export const rejectDocument = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator((input: unknown) =>
-    z.object({
-      evidence_id: z.string().uuid(),
-      unlink: z.boolean().optional().default(false),
-    }).parse(input)
+    z
+      .object({
+        evidence_id: z.string().uuid(),
+        unlink: z.boolean().optional().default(false),
+      })
+      .parse(input),
   )
   .handler(async ({ data, context }) => {
     const { supabase } = context;
-    await supabase.from("evidence").update({
-      review_status: "unknown",
-    } as any).eq("id", data.evidence_id);
+    await supabase
+      .from("evidence")
+      .update({
+        review_status: "unknown",
+      } as any)
+      .eq("id", data.evidence_id);
     if (data.unlink) {
       await supabase.from("evidence_links").delete().eq("evidence_id", data.evidence_id);
     }
     return { ok: true };
   });
-

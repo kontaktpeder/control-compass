@@ -102,14 +102,14 @@ const en = {
 
   "workflow.eyebrow": "Workspace",
   "workflow.title": "Register Company",
-  "workflow.lede":
-    "Follow what’s on file, what needs review, and what’s still missing.",
+  "workflow.lede": "Follow what’s on file, what needs review, and what’s still missing.",
   "workflow.requiredOnFile": "{onFile} / {total} required on file",
   "workflow.awaitingReview": "{count} awaiting your review",
   "workflow.requiredTitle": "Required documents",
   "workflow.requiredSubtitle": "Legally required to incorporate and run the company.",
   "workflow.companyTitle": "Company documents",
-  "workflow.companySubtitle": "Recommended internal agreements. Not required by law, but good practice.",
+  "workflow.companySubtitle":
+    "Recommended internal agreements. Not required by law, but good practice.",
   "workflow.responsible": "Responsible:",
   "workflow.source": "Source",
   "workflow.noDocument": "No document yet.",
@@ -123,7 +123,8 @@ const en = {
     "Every file has a category and an owner. Linking to a compliance requirement is optional.",
   "library.startNew": "Start a new document",
   "library.uploadTitle": "Upload to the library",
-  "library.uploadHint": "PDF or image. AI suggests a category — you can override it after upload.",
+  "library.uploadHint":
+    "PDF or image. Named files are matched to requirements; unmatched files can be interpreted with AI.",
   "library.uploadCta": "Upload",
   "library.uploadBlank": "Upload",
   "library.recent": "Documents",
@@ -146,6 +147,8 @@ const en = {
   "library.chip.linked": "Linked to a requirement",
   "library.requirement": "Requirement:",
   "library.reviewAssignment": "Review assignment",
+  "library.interpretAi": "Interpret with AI",
+  "library.interpreted": "AI interpretation finished",
   "library.openFailed": "Could not open file",
 
   "meta.eyebrow": "Document",
@@ -160,17 +163,17 @@ const en = {
 
   "review.eyebrow": "Review document",
   "review.title": "Confirm what this document is",
-  "review.assignedTo": "Assigned to {title}. Confirm the AI's suggestion, edit it, or reject it.",
+  "review.assignedTo": "Assigned to {title}. Confirm the suggestion, edit it, or reject it.",
   "review.documentType": "Document type",
   "review.purpose": "Purpose",
-  "review.aiReasoning": "AI reasoning",
+  "review.aiReasoning": "Why this suggestion",
   "review.confirm": "Confirm & verify",
   "review.saveVerify": "Save & verify",
   "review.reject": "Reject suggestion",
   "review.verified": "Verified",
   "review.reset": "Reset to needs review",
 
-  "upload.understanding": "Understanding document…",
+  "upload.understanding": "Filing document…",
   "upload.uploaded": "Document uploaded",
   "upload.replaced": "Document replaced — review the new one",
   "upload.replaceCta": "Replace document",
@@ -187,7 +190,8 @@ const en = {
   "obligations.why": "Why this obligation exists",
   "obligations.requiredEvidence": "Required evidence",
   "obligations.assessment": "Assessment",
-  "obligations.assessmentHint": "AI's honest read of the evidence available. Confidence is not compliance.",
+  "obligations.assessmentHint":
+    "AI's honest read of the evidence available. Confidence is not compliance.",
   "obligations.reassess": "Re-assess",
   "obligations.assessing": "Assessing…",
   "obligations.assessed": "Assessment updated",
@@ -256,7 +260,8 @@ const en = {
   "settings.noKeys": "No API keys yet.",
   "settings.revoked": "(revoked)",
   "settings.revoke": "Revoke key",
-  "settings.revokeConfirm": "Revoke this API key? Nexus will stop connecting until you create a new one.",
+  "settings.revokeConfirm":
+    "Revoke this API key? Nexus will stop connecting until you create a new one.",
   "settings.keyCreated": "API key created",
   "settings.keyRevoked": "Key revoked",
   "settings.createFailed": "Could not create key",
@@ -373,8 +378,7 @@ const nb: { [K in keyof typeof en]: string } = {
 
   "workflow.eyebrow": "Arbeidsområde",
   "workflow.title": "Registrer selskap",
-  "workflow.lede":
-    "Følg opp det som er på plass, det som trenger gjennomgang, og det som mangler.",
+  "workflow.lede": "Følg opp det som er på plass, det som trenger gjennomgang, og det som mangler.",
   "workflow.requiredOnFile": "{onFile} / {total} påkrevde på plass",
   "workflow.awaitingReview": "{count} venter på gjennomgang",
   "workflow.requiredTitle": "Påkrevde dokumenter",
@@ -394,7 +398,8 @@ const nb: { [K in keyof typeof en]: string } = {
     "Hver fil har en kategori og en eier. Kobling til et etterlevelseskrav er valgfritt.",
   "library.startNew": "Start et nytt dokument",
   "library.uploadTitle": "Last opp til biblioteket",
-  "library.uploadHint": "PDF eller bilde. AI foreslår kategori — du kan overstyre etter opplasting.",
+  "library.uploadHint":
+    "PDF eller bilde. Filnavn treffer mot krav; filer uten treff kan tolkes med AI.",
   "library.uploadCta": "Last opp",
   "library.uploadBlank": "Last opp",
   "library.recent": "Dokumenter",
@@ -417,6 +422,8 @@ const nb: { [K in keyof typeof en]: string } = {
   "library.chip.linked": "Koblet til et krav",
   "library.requirement": "Krav:",
   "library.reviewAssignment": "Gå gjennom kobling",
+  "library.interpretAi": "Tolke med AI",
+  "library.interpreted": "AI-tolkning ferdig",
   "library.openFailed": "Kunne ikke åpne filen",
 
   "meta.eyebrow": "Dokument",
@@ -431,24 +438,25 @@ const nb: { [K in keyof typeof en]: string } = {
 
   "review.eyebrow": "Gå gjennom dokument",
   "review.title": "Bekreft hva dette dokumentet er",
-  "review.assignedTo": "Koblet til {title}. Bekreft AI-forslaget, rediger det, eller avvis det.",
+  "review.assignedTo": "Koblet til {title}. Bekreft forslaget, rediger det, eller avvis det.",
   "review.documentType": "Dokumenttype",
   "review.purpose": "Formål",
-  "review.aiReasoning": "AI-begrunnelse",
+  "review.aiReasoning": "Hvorfor dette forslaget",
   "review.confirm": "Bekreft og verifiser",
   "review.saveVerify": "Lagre og verifiser",
   "review.reject": "Avvis forslag",
   "review.verified": "Verifisert",
   "review.reset": "Satt tilbake til gjennomgang",
 
-  "upload.understanding": "Forstår dokumentet…",
+  "upload.understanding": "Registrerer dokument…",
   "upload.uploaded": "Dokument lastet opp",
   "upload.replaced": "Dokument erstattet — gå gjennom det nye",
   "upload.replaceCta": "Erstatt dokument",
 
   "obligations.eyebrow": "Forpliktelser",
   "obligations.title": "Hver plikt, hver kilde",
-  "obligations.lede": "Hver forpliktelse forklarer hvor den kommer fra og hvilket bevis den trenger.",
+  "obligations.lede":
+    "Hver forpliktelse forklarer hvor den kommer fra og hvilket bevis den trenger.",
   "obligations.search": "Søk i forpliktelser…",
   "obligations.col.obligation": "Forpliktelse",
   "obligations.col.framework": "Rammeverk",
@@ -458,7 +466,8 @@ const nb: { [K in keyof typeof en]: string } = {
   "obligations.why": "Hvorfor denne forpliktelsen finnes",
   "obligations.requiredEvidence": "Påkrevd bevis",
   "obligations.assessment": "Vurdering",
-  "obligations.assessmentHint": "AIs ærlige lesning av tilgjengelig bevis. Konfidens er ikke etterlevelse.",
+  "obligations.assessmentHint":
+    "AIs ærlige lesning av tilgjengelig bevis. Konfidens er ikke etterlevelse.",
   "obligations.reassess": "Vurder på nytt",
   "obligations.assessing": "Vurderer…",
   "obligations.assessed": "Vurdering oppdatert",
@@ -527,7 +536,8 @@ const nb: { [K in keyof typeof en]: string } = {
   "settings.noKeys": "Ingen API-nøkler ennå.",
   "settings.revoked": "(tilbakekalt)",
   "settings.revoke": "Tilbakekall nøkkel",
-  "settings.revokeConfirm": "Tilbakekalle denne API-nøkkelen? Nexus mister tilkoblingen til du lager en ny.",
+  "settings.revokeConfirm":
+    "Tilbakekalle denne API-nøkkelen? Nexus mister tilkoblingen til du lager en ny.",
   "settings.keyCreated": "API-nøkkel opprettet",
   "settings.keyRevoked": "Nøkkel tilbakekalt",
   "settings.createFailed": "Kunne ikke opprette nøkkel",
