@@ -34,7 +34,7 @@ import { toast } from "sonner";
 import { useT } from "@/components/locale-provider";
 import { localizeObligationTitle } from "@/lib/playbook-i18n";
 import { isDocumentCategory, type LibraryItem } from "@/lib/library";
-import { suggestedDisplayName } from "@/lib/file-name";
+import { isOpaqueFileName, suggestedDisplayName, suggestedFileNameFromHeading } from "@/lib/file-name";
 
 const documentsSearch = z.object({
   mode: z.enum(["register", "food"]).optional(),
@@ -224,7 +224,7 @@ function DocumentsPage() {
       supabase
         .from("evidence")
         .select(
-          "id, file_name, file_path, mime_type, ai_summary, primary_document_type, primary_purpose, primary_document_type_confidence, primary_purpose_confidence, document_type_candidates, purpose_candidates",
+          "id, file_name, file_path, mime_type, ai_summary, printed_title, primary_document_type, primary_purpose, primary_document_type_confidence, primary_purpose_confidence, document_type_candidates, purpose_candidates",
         )
         .eq("id", evidenceId)
         .single(),
@@ -248,6 +248,8 @@ function DocumentsPage() {
         .maybeSingle();
       obligationTitle = ob?.title ? localizeObligationTitle(locale, ob.title) : null;
     }
+    const typeLabel = a?.document_type ?? a?.ai_document_type ?? ev.primary_document_type;
+    const headingSuggested = suggestedFileNameFromHeading(ev.printed_title, ev.file_name);
     setReviewing({
       assignment_id: a?.id ?? null,
       obligation_id: a?.obligation_id ?? null,
@@ -257,11 +259,11 @@ function DocumentsPage() {
       file_name: ev.file_name,
       file_path: ev.file_path,
       mime_type: ev.mime_type,
-      suggested_file_name: suggestedDisplayName(
-        orgRes.data?.name ?? "",
-        a?.document_type ?? a?.ai_document_type ?? ev.primary_document_type,
-        ev.file_name,
-      ),
+      suggested_file_name:
+        headingSuggested ??
+        (isOpaqueFileName(ev.file_name)
+          ? suggestedDisplayName(orgRes.data?.name ?? "", typeLabel, ev.file_name)
+          : null),
       document_type: a?.document_type ?? ev.primary_document_type,
       purpose: a?.purpose ?? ev.primary_purpose,
       ai_document_type: a?.ai_document_type ?? ev.primary_document_type,
@@ -279,15 +281,22 @@ function DocumentsPage() {
   const interpretWithAi = async (d: LibraryItem) => {
     toast.info(t("upload.understanding"));
     try {
-      await classify({
+      const classified = (await classify({
         data: {
           evidence_id: d.id,
           hint_obligation_id: d.obligation?.id ?? null,
           upload_context: "library",
           force_ai: true,
         },
-      });
-      toast.success(t("library.interpreted"));
+      })) as { linked_titles?: string[] } | undefined;
+      const titles = (classified?.linked_titles ?? []).map((title) =>
+        localizeObligationTitle(locale, title),
+      );
+      toast.success(
+        titles.length
+          ? t("upload.linkedTo", { titles: titles.join(", ") })
+          : t("library.interpreted"),
+      );
       await qc.invalidateQueries({ queryKey: ["documents", orgId] });
       await qc.invalidateQueries({ queryKey: ["register-company", orgId] });
       await openFiling(d.id);

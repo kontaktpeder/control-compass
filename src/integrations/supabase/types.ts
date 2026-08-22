@@ -227,6 +227,7 @@ export type Database = {
           ai_category_confidence: number | null
           responsible_user_id: string | null
           review_due_at: string | null
+          printed_title: string | null
         }
         Insert: {
           ai_alternatives?: Json
@@ -257,6 +258,7 @@ export type Database = {
           ai_category_confidence?: number | null
           responsible_user_id?: string | null
           review_due_at?: string | null
+          printed_title?: string | null
         }
         Update: {
           ai_alternatives?: Json
@@ -287,6 +289,7 @@ export type Database = {
           ai_category_confidence?: number | null
           responsible_user_id?: string | null
           review_due_at?: string | null
+          printed_title?: string | null
         }
         Relationships: [
           {

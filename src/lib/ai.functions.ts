@@ -11,7 +11,24 @@ import {
   routingSummary,
   type ObligationRoute,
 } from "@/lib/document-routing";
-import { isOpaqueFileName, suggestedDisplayName } from "@/lib/file-name";
+import { isOpaqueFileName, suggestedDisplayName, suggestedFileNameFromHeading } from "@/lib/file-name";
+
+function uniqueIds(ids: string[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const id of ids) {
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
+function cleanPrintedTitle(raw: unknown): string | null {
+  if (typeof raw !== "string") return null;
+  const clean = raw.replace(/["«»]/g, "").replace(/\s+/g, " ").trim();
+  return clean.length >= 4 ? clean : null;
+}
 
 function tryParseJson(raw: string | undefined): any {
   if (!raw) return null;
@@ -312,6 +329,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       confidence: z.number(),
     });
     const identifySchema = z.object({
+      printed_title: z.string(),
       document_type_candidates: z.array(candidate),
       purpose_candidates: z.array(candidate),
       category: z.enum(DOCUMENT_CATEGORY_IDS),
@@ -322,6 +340,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     type Identify = z.infer<typeof identifySchema>;
 
     let identified: Identify = {
+      printed_title: "",
       document_type_candidates: [],
       purpose_candidates: [],
       category: "reference",
@@ -343,9 +362,15 @@ export const classifyEvidence = createServerFn({ method: "POST" })
                 text: [
                   "You are analysing an uploaded organizational document.",
                   "",
-                  "ALWAYS respond in English. Every `label` and the summary MUST be written in English,",
+                  "printed_title: copy the main heading printed on the first page, in the source language.",
+                  "Use normal capitalization (not ALL CAPS). Do not translate printed_title.",
+                  'Example: "REGISTERUTSKRIFT FRA ENHETSREGISTERET OG FORETAKSREGISTERET" →',
+                  '"Registerutskrift fra Enhetsregisteret og Foretaksregisteret".',
+                  "If there is no heading, return an empty string.",
+                  "",
+                  "ALWAYS respond in English for every `label` and the summary,",
                   'even when the source document is in another language (e.g. Norwegian "Vedtekter" →',
-                  'label "Articles of Association"). Do not return labels in the source language.',
+                  'label "Articles of Association"). Do not return type labels in the source language.',
                   "",
                   "Return 1-3 candidate document types, each as { label, confidence }.",
                   'Each `label` MUST be a short human-readable English string, e.g. "Founders\' Agreement",',
@@ -386,6 +411,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       const parsed = tryParseJson(raw);
       if (parsed) {
         identified = {
+          printed_title: typeof parsed.printed_title === "string" ? parsed.printed_title : "",
           document_type_candidates: Array.isArray(parsed.document_type_candidates)
             ? parsed.document_type_candidates
             : [],
@@ -432,6 +458,13 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
     const primaryDoc = docCandidates[0] ?? null;
     const primaryPurpose = purposeCandidates[0] ?? null;
+    const printedTitle = cleanPrintedTitle(identified.printed_title);
+    const headingMatches = printedTitle
+      ? matchObligationsByFilename(printedTitle, obligations ?? [])
+      : [];
+    const nameMatches = opaqueName
+      ? []
+      : matchObligationsByFilename(ev.file_name, obligations ?? []);
 
     // --- Stage 3: find related obligations ---
     const obligationsList = (obligations ?? [])
@@ -462,14 +495,15 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       reasoning: "Matching stage did not run.",
     };
 
-    if ((obligations ?? []).length > 0 && primaryDoc) {
+    if ((obligations ?? []).length > 0 && (primaryDoc || printedTitle)) {
       try {
         const gen = await generateObject({
           model,
           schema: matchSchema,
           prompt: [
             "A document has been identified as follows:",
-            `Type: ${primaryDoc.label}`,
+            `Printed heading: ${printedTitle ?? "(none)"}`,
+            `Type: ${primaryDoc?.label ?? "unknown"}`,
             `Purpose: ${primaryPurpose?.label ?? "unknown"}`,
             `Summary: ${identified.summary}`,
             "",
@@ -482,6 +516,10 @@ export const classifyEvidence = createServerFn({ method: "POST" })
             "- internal_knowledge: valuable to the org, no obligation link.",
             "- no_match: understood, but does not relate to any listed obligation.",
             "- needs_review: not confident — human should confirm.",
+            "",
+            "If the printed heading clearly names a duty, include that obligation's id.",
+            "Examples: registerutskrift / Enhetsregisteret / Foretaksregisteret / firmaattest → Brønnøysund registration;",
+            "reelle rettighetshavere → Beneficial Owners Register.",
             "",
             "Return supported_obligation_ids as exact ids (may be empty). Never invent an id.",
             "",
@@ -511,7 +549,7 @@ export const classifyEvidence = createServerFn({ method: "POST" })
           matched.reasoning = e instanceof Error ? e.message : "matching failed";
         }
       }
-    } else if (!primaryDoc) {
+    } else if (!primaryDoc && !printedTitle) {
       matched.relationship = "needs_review";
       matched.reasoning = "Document type could not be identified.";
     } else {
@@ -522,10 +560,24 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       };
     }
 
-    const linkedIds = matched.supported_obligation_ids.filter((id) => validIds.has(id));
+    const linkedIds = uniqueIds([
+      ...matched.supported_obligation_ids.filter((id) => validIds.has(id)),
+      ...headingMatches.map((m) => m.obligationId),
+      ...nameMatches.map((m) => m.obligationId),
+    ]);
+    const headingRoute = headingMatches[0]?.route ?? nameMatches[0]?.route ?? null;
+    const effectiveType = primaryDoc?.label ?? headingRoute?.documentType ?? null;
+    const effectivePurpose = primaryPurpose?.label ?? headingRoute?.purpose ?? null;
+    const headingName = suggestedFileNameFromHeading(printedTitle, ev.file_name);
+    const suggestedName =
+      headingName ?? suggestedDisplayName(orgName, effectiveType, ev.file_name);
+    const nextFileName = opaqueName && headingName ? headingName : ev.file_name;
 
     // Classification status (used for the relationship badge on the card)
     let classification_status: ClassificationStatus = matched.relationship;
+    if (headingMatches.length + nameMatches.length > 0) {
+      classification_status = "direct_evidence";
+    }
     if (
       linkedIds.length === 0 &&
       (classification_status === "direct_evidence" ||
@@ -533,14 +585,18 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     ) {
       classification_status = "needs_review";
     }
-    if ((primaryDoc?.confidence ?? 0) < 0.3 && classification_status !== "no_match") {
+    if (
+      (primaryDoc?.confidence ?? 0) < 0.3 &&
+      headingMatches.length + nameMatches.length === 0 &&
+      classification_status !== "no_match"
+    ) {
       classification_status = "needs_review";
     }
 
     const suggestedCategory: DocumentCategory | null =
       identified.category_confidence >= 0.3 && isDocumentCategory(identified.category)
         ? identified.category
-        : null;
+        : (headingRoute?.category ?? null);
 
     // --- Stage 4: persist AI metadata on evidence (candidates only, no product status) ---
     // Never overwrite a human-set category; always record the AI suggestion.
@@ -548,22 +604,24 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       .from("evidence")
       .update({
         ai_summary: identified.summary,
-        ai_confidence: primaryDoc?.confidence ?? 0,
-        primary_document_type: primaryDoc?.label ?? null,
-        primary_document_type_confidence: primaryDoc?.confidence ?? null,
+        ai_confidence: primaryDoc?.confidence ?? (headingMatches.length ? 0.9 : 0),
+        primary_document_type: effectiveType,
+        primary_document_type_confidence: primaryDoc?.confidence ?? (headingRoute ? 0.9 : null),
         document_type_candidates: docCandidates as unknown as any,
-        primary_purpose: primaryPurpose?.label ?? null,
-        primary_purpose_confidence: primaryPurpose?.confidence ?? null,
+        primary_purpose: effectivePurpose,
+        primary_purpose_confidence: primaryPurpose?.confidence ?? (headingRoute ? 0.9 : null),
         purpose_candidates: purposeCandidates as unknown as any,
         // Legacy columns kept in sync but no longer read by UI.
-        document_type: primaryDoc?.label ?? null,
-        document_type_confidence: primaryDoc?.confidence ?? null,
-        purpose: primaryPurpose?.label ?? null,
+        document_type: effectiveType,
+        document_type_confidence: primaryDoc?.confidence ?? (headingRoute ? 0.9 : null),
+        purpose: effectivePurpose,
         classification_status,
         ai_alternatives: docCandidates as unknown as any,
         ai_reasoning: `${identified.reasoning}\n\nRelationship: ${matched.reasoning}`,
         ai_category: suggestedCategory,
         ai_category_confidence: identified.category_confidence || null,
+        printed_title: printedTitle,
+        ...(nextFileName !== ev.file_name ? { file_name: nextFileName } : {}),
         ...(ev.category ? {} : { category: suggestedCategory }),
       } as any)
       .eq("id", ev.id);
@@ -589,13 +647,13 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     }
 
     const aiPatch = {
-      ai_document_type: primaryDoc?.label ?? null,
-      ai_document_type_confidence: primaryDoc?.confidence ?? null,
-      ai_purpose: primaryPurpose?.label ?? null,
-      ai_purpose_confidence: primaryPurpose?.confidence ?? null,
+      ai_document_type: effectiveType,
+      ai_document_type_confidence: primaryDoc?.confidence ?? (headingRoute ? 0.9 : null),
+      ai_purpose: effectivePurpose,
+      ai_purpose_confidence: primaryPurpose?.confidence ?? (headingRoute ? 0.9 : null),
       ai_summary: identified.summary,
       ai_reasoning_full: matched.reasoning,
-      relevance: primaryDoc?.confidence ?? 0,
+      relevance: primaryDoc?.confidence ?? (headingRoute ? 0.9 : 0),
       ai_reasoning: matched.reasoning,
     };
 
@@ -623,17 +681,18 @@ export const classifyEvidence = createServerFn({ method: "POST" })
     }
 
     return {
-      primary_document_type: primaryDoc?.label ?? null,
-      primary_document_type_confidence: primaryDoc?.confidence ?? null,
-      primary_purpose: primaryPurpose?.label ?? null,
-      primary_purpose_confidence: primaryPurpose?.confidence ?? null,
+      primary_document_type: effectiveType,
+      primary_document_type_confidence: primaryDoc?.confidence ?? (headingRoute ? 0.9 : null),
+      primary_purpose: effectivePurpose,
+      primary_purpose_confidence: primaryPurpose?.confidence ?? (headingRoute ? 0.9 : null),
       document_type_candidates: docCandidates,
       purpose_candidates: purposeCandidates,
       classification_status,
       summary: identified.summary,
       linked_obligation_ids: linkedArray,
       linked_titles: linkedArray.map((id) => titleById.get(id) ?? id),
-      suggested_file_name: suggestedDisplayName(orgName, primaryDoc?.label, ev.file_name),
+      suggested_file_name: suggestedName,
+      printed_title: printedTitle,
       category: ev.category ?? suggestedCategory,
       ai_category: suggestedCategory,
       used_ai: true,

@@ -12,7 +12,6 @@ import { Check, X, Sparkles, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/locale-provider";
 import { DocumentPreview } from "@/components/document-preview";
-import { isOpaqueFileName } from "@/lib/file-name";
 
 export type Candidate = { label: string; confidence: number };
 
@@ -63,14 +62,15 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
       setDocType(assignment.document_type ?? assignment.ai_document_type ?? "");
       setPurpose(assignment.purpose ?? assignment.ai_purpose ?? "");
       const suggested = assignment.suggested_file_name?.trim();
-      setFileName(
-        suggested && isOpaqueFileName(assignment.file_name)
-          ? suggested
-          : assignment.file_name,
-      );
+      setFileName(suggested || assignment.file_name);
       setEditing(false);
     }
-  }, [assignment?.evidence_id, assignment?.assignment_id]);
+  }, [
+    assignment?.evidence_id,
+    assignment?.assignment_id,
+    assignment?.file_name,
+    assignment?.suggested_file_name,
+  ]);
 
   if (!assignment) return null;
 

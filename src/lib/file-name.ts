@@ -31,6 +31,23 @@ export function isOpaqueFileName(name: string): boolean {
   return digits / compact.length >= 0.65;
 }
 
+export function suggestedFileNameFromHeading(
+  heading: string | null | undefined,
+  originalName: string,
+): string | null {
+  const clean = (heading ?? "")
+    .replace(/\.[a-z0-9]{1,8}$/i, "")
+    .replace(/["«»]/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (clean.length < 4) return null;
+  const stem =
+    clean === clean.toUpperCase() && /[A-ZÆØÅ]/.test(clean)
+      ? clean.toLowerCase().replace(/(^|\s)\S/g, (ch) => ch.toUpperCase())
+      : clean;
+  return `${sanitizeFileStem(stem)}${fileExtension(originalName)}`;
+}
+
 export function suggestedDisplayName(
   orgName: string,
   documentType: string | null | undefined,
