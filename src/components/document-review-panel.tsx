@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
-import { confirmAssignment, rejectAssignment } from "@/lib/document-assignment.functions";
+import { confirmAssignment, unlinkAssignment } from "@/lib/document-assignment.functions";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { toast } from "sonner";
@@ -46,7 +46,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
   const { t } = useT();
   const qc = useQueryClient();
   const confirmFn = useServerFn(confirmAssignment);
-  const rejectFn = useServerFn(rejectAssignment);
+  const unlinkFn = useServerFn(unlinkAssignment);
 
   const [editing, setEditing] = useState(false);
   const [docType, setDocType] = useState("");
@@ -95,15 +95,15 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
     }
   };
 
-  const handleReject = async () => {
+  const handleUnlink = async () => {
     setBusy(true);
     try {
-      await rejectFn({ data: { assignment_id: assignment.assignment_id } });
-      toast.info(t("review.reset"));
+      await unlinkFn({ data: { assignment_id: assignment.assignment_id } });
+      toast.success(t("workflow.unlinked"));
       await runAfterChange();
       onOpenChange(false);
     } catch (e) {
-      toast.error(e instanceof Error ? e.message : String(e));
+      toast.error(e instanceof Error ? e.message : t("workflow.unlinkFailed"));
     } finally {
       setBusy(false);
     }
@@ -208,17 +208,15 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
                   <Pencil className="mr-1 h-4 w-4" />
                   {t("common.edit")}
                 </Button>
-                {assignment.status === "verified" ? null : (
-                  <Button
-                    variant="ghost"
-                    disabled={busy}
-                    onClick={handleReject}
-                    className="text-muted-foreground"
-                  >
-                    <X className="mr-1 h-4 w-4" />
-                    {t("review.reject")}
-                  </Button>
-                )}
+                <Button
+                  variant="ghost"
+                  disabled={busy}
+                  onClick={handleUnlink}
+                  className="text-muted-foreground"
+                >
+                  <X className="mr-1 h-4 w-4" />
+                  {t("review.unlink")}
+                </Button>
               </>
             ) : (
               <>

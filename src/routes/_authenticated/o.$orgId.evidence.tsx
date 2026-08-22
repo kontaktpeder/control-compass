@@ -1,11 +1,12 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyEvidence } from "@/lib/ai.functions";
-import { DocumentUpload, type DocumentUploadHandle } from "@/components/document-upload";
+import { unlinkAssignment } from "@/lib/document-assignment.functions";
+import { DocumentUpload } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { DocumentMetaSheet } from "@/components/document-meta-sheet";
 import { RegisterCompanyGuide } from "@/components/register-company";
@@ -71,10 +72,8 @@ function DocumentsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
   const { selectedIds, toggle, clear } = useSelectedIds();
-  const replaceUploadRef = useRef<DocumentUploadHandle>(null);
-  const replaceAssignmentIdRef = useRef<string | null>(null);
-  const replaceHintIdRef = useRef<string | null>(null);
   const classify = useServerFn(classifyEvidence);
+  const unlinkFn = useServerFn(unlinkAssignment);
 
   const setMode = (next: "register" | "food" | undefined) => {
     void navigate({
@@ -273,12 +272,19 @@ function DocumentsPage() {
     });
     if (d.assignment) {
       actions.push({
-        id: "replace",
-        label: t("common.replace"),
+        id: "unlink",
+        label: t("library.unlink"),
         onSelect: () => {
-          replaceAssignmentIdRef.current = d.assignment!.id;
-          replaceHintIdRef.current = d.obligation?.id ?? null;
-          replaceUploadRef.current?.pick();
+          void (async () => {
+            try {
+              await unlinkFn({ data: { assignment_id: d.assignment!.id } });
+              toast.success(t("workflow.unlinked"));
+              await qc.invalidateQueries({ queryKey: ["documents", orgId] });
+              await qc.invalidateQueries({ queryKey: ["register-company", orgId] });
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : t("workflow.unlinkFailed"));
+            }
+          })();
         },
       });
     }
@@ -296,10 +302,12 @@ function DocumentsPage() {
   return (
     <LibraryPageShell
       mutedTop={
+        mode ? undefined : (
         <div className="mx-auto max-w-6xl px-6 py-6">
           <p className="mb-3 text-sm text-muted-foreground">{t("library.startNew")}</p>
           <DocumentUpload orgId={orgId} context="library" appearance="tile" />
         </div>
+        )
       }
     >
       <div className="mb-6 flex flex-wrap items-center gap-2">
@@ -328,7 +336,7 @@ function DocumentsPage() {
 
       {mode && <RegisterCompanyGuide orgId={orgId} topic={mode} onReview={setReviewing} />}
 
-      {documents.isLoading ? (
+      {!mode && (documents.isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
       ) : (
         <LibraryBrowser
@@ -356,7 +364,7 @@ function DocumentsPage() {
           }
           empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
         />
-      )}
+      ))}
 
       <DocumentReviewPanel
         open={!!reviewing}
@@ -372,15 +380,6 @@ function DocumentsPage() {
         }}
         orgId={orgId}
         evidenceId={editingId}
-      />
-      <DocumentUpload
-        ref={replaceUploadRef}
-        orgId={orgId}
-        context="library"
-        mode="replace"
-        assignmentIdRef={replaceAssignmentIdRef}
-        hintObligationIdRef={replaceHintIdRef}
-        className="hidden"
       />
       <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
         <AlertDialogContent>

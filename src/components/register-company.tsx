@@ -1,4 +1,5 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useServerFn } from "@tanstack/react-start";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { DocumentStatusPill, type DocLifecycle } from "@/components/status";
@@ -15,6 +16,7 @@ import { FileText, ExternalLink } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { isFoodSafetyObligationTitle, localizeObligation } from "@/lib/playbook-i18n";
 import { legalBasisForObligation } from "@/lib/legal-sources";
+import { unlinkAssignment } from "@/lib/document-assignment.functions";
 
 type EvidenceLite = {
   id: string;
@@ -89,6 +91,19 @@ export function RegisterCompanyGuide({
   topic: "register" | "food";
 }) {
   const { t, locale } = useT();
+  const qc = useQueryClient();
+  const unlink = useServerFn(unlinkAssignment);
+
+  const unlinkFromRequirement = async (assignmentId: string) => {
+    try {
+      await unlink({ data: { assignment_id: assignmentId } });
+      toast.success(t("workflow.unlinked"));
+      await qc.invalidateQueries({ queryKey: ["register-company", orgId] });
+      await qc.invalidateQueries({ queryKey: ["documents", orgId] });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : t("workflow.unlinkFailed"));
+    }
+  };
 
   const data = useQuery({
     queryKey: ["register-company", orgId, topic],
@@ -146,6 +161,15 @@ export function RegisterCompanyGuide({
   const onFile = shown.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
   const needsReview = shown.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
 
+  const titlesByEvidence = new Map<string, string[]>();
+  for (const o of obs) {
+    const evId = byOb.get(o.id)?.evidence?.id;
+    if (!evId) continue;
+    const list = titlesByEvidence.get(evId) ?? [];
+    list.push(o.title);
+    titlesByEvidence.set(evId, list);
+  }
+
   if (data.error) {
     return (
       <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3">
@@ -178,14 +202,18 @@ export function RegisterCompanyGuide({
             orgId={orgId}
             obligations={required}
             byOb={byOb}
+            titlesByEvidence={titlesByEvidence}
             onReview={onReview}
+            onUnlink={unlinkFromRequirement}
           />
           <GuideGroup
             label={t("workflow.companyTitle")}
             orgId={orgId}
             obligations={company}
             byOb={byOb}
+            titlesByEvidence={titlesByEvidence}
             onReview={onReview}
+            onUnlink={unlinkFromRequirement}
           />
         </div>
       )}
@@ -200,7 +228,14 @@ export function RegisterCompanyGuide({
         </p>
       )}
       {topic === "food" && kind !== "holding" && food.length > 0 && (
-        <GuideGroup orgId={orgId} obligations={food} byOb={byOb} onReview={onReview} />
+        <GuideGroup
+          orgId={orgId}
+          obligations={food}
+          byOb={byOb}
+          titlesByEvidence={titlesByEvidence}
+          onReview={onReview}
+          onUnlink={unlinkFromRequirement}
+        />
       )}
     </div>
   );
@@ -211,7 +246,9 @@ function GuideGroup({
   orgId,
   obligations,
   byOb,
+  titlesByEvidence,
   onReview,
+  onUnlink,
 }: {
   label?: string;
   orgId: string;
@@ -219,7 +256,9 @@ function GuideGroup({
     ObligationRow & { legal: { citation: string; url: string } | null }
   >;
   byOb: Map<string, Assignment>;
+  titlesByEvidence: Map<string, string[]>;
   onReview: (a: ReviewAssignment) => void;
+  onUnlink: (assignmentId: string) => void;
 }) {
   const { t } = useT();
   if (obligations.length === 0) return null;
@@ -243,12 +282,29 @@ function GuideGroup({
           };
           return (
             <AccordionItem key={o.id} value={o.id} className="border-border px-3">
-              <AccordionTrigger className="py-2.5 hover:no-underline">
-                <span className="flex min-w-0 flex-1 items-center gap-3 pr-3">
-                  <span className="min-w-0 flex-1 truncate text-left text-sm">{o.title}</span>
-                  <DocumentStatusPill state={lifecycle} />
-                </span>
-              </AccordionTrigger>
+              <div className="flex items-center gap-1">
+                <AccordionTrigger className="flex-1 py-2.5 hover:no-underline">
+                  <span className="flex min-w-0 flex-1 items-center gap-3 pr-2">
+                    <span className="min-w-0 flex-1 truncate text-left text-sm">{o.title}</span>
+                    <DocumentStatusPill state={lifecycle} />
+                  </span>
+                </AccordionTrigger>
+                {assignment && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="shrink-0 text-muted-foreground"
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onUnlink(assignment.id);
+                    }}
+                  >
+                    {t("workflow.unlink")}
+                  </Button>
+                )}
+              </div>
               <AccordionContent>
                 <div className="space-y-3 pb-3">
                   {o.why && <p className="text-sm text-muted-foreground">{o.why}</p>}
@@ -277,10 +333,22 @@ function GuideGroup({
                     </ul>
                   )}
                   {ev && (
-                    <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                      <FileText className="h-3 w-3 shrink-0" />
-                      <span className="truncate">{ev.file_name}</span>
-                    </p>
+                    <div className="space-y-1">
+                      <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                        <FileText className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{ev.file_name}</span>
+                      </p>
+                      {(titlesByEvidence.get(ev.id) ?? []).filter((title) => title !== o.title)
+                        .length > 0 && (
+                        <p className="text-xs text-status-partial">
+                          {t("workflow.alsoLinked", {
+                            titles: (titlesByEvidence.get(ev.id) ?? [])
+                              .filter((title) => title !== o.title)
+                              .join(", "),
+                          })}
+                        </p>
+                      )}
+                    </div>
                   )}
                   <div className="flex flex-wrap items-center gap-2">
                     {lifecycle === "no_document" && (
@@ -299,34 +367,31 @@ function GuideGroup({
                       </Button>
                     )}
                     {lifecycle === "on_file" && ev && assignment && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={async () => {
-                            const { data, error } = await supabase.storage
-                              .from("evidence")
-                              .createSignedUrl(ev.file_path, 60);
-                            if (error || !data?.signedUrl) {
-                              toast.error(error?.message ?? t("workflow.openFailed"));
-                              return;
-                            }
-                            window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-                          }}
-                        >
-                          {t("common.view")}
-                        </Button>
-                        <DocumentUpload
-                          orgId={orgId}
-                          hintObligationId={o.id}
-                          context="workflow"
-                          mode="replace"
-                          assignmentId={assignment.id}
-                          size="sm"
-                          variant="ghost"
-                          label={t("common.replace")}
-                        />
-                      </>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={async () => {
+                          const { data, error } = await supabase.storage
+                            .from("evidence")
+                            .createSignedUrl(ev.file_path, 60);
+                          if (error || !data?.signedUrl) {
+                            toast.error(error?.message ?? t("workflow.openFailed"));
+                            return;
+                          }
+                          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                        }}
+                      >
+                        {t("common.view")}
+                      </Button>
+                    )}
+                    {assignment && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onUnlink(assignment.id)}
+                      >
+                        {t("workflow.unlink")}
+                      </Button>
                     )}
                   </div>
                 </div>

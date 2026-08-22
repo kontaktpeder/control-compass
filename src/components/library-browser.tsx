@@ -219,7 +219,7 @@ function ItemMenu({ actions }: { actions: LibraryMenuAction[] }) {
           type="button"
           size="icon"
           variant="ghost"
-          className="h-8 w-8 shrink-0"
+          className="h-8 w-8 shrink-0 border border-border bg-background"
           aria-label={t("library.more")}
           onClick={(e) => e.stopPropagation()}
         >
