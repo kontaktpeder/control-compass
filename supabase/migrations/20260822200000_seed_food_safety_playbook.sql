@@ -13,6 +13,13 @@ declare
   pb uuid;
   s1 uuid; s2 uuid; s3 uuid;
 begin
+  if exists (
+    select 1 from public.organizations
+    where id = _org and kind not in ('operating', 'sole_prop')
+  ) then
+    return;
+  end if;
+
   if exists (select 1 from public.playbooks where org_id = _org and slug = 'food_safety') then
     return;
   end if;

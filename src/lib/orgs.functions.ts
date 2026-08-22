@@ -58,5 +58,13 @@ export const listOrganizations = createServerFn({ method: "GET" })
       .select("id, name, kind, org_number, created_at")
       .order("created_at", { ascending: false });
     if (error) throw new Error(error.message);
-    return data ?? [];
+    const orgs = data ?? [];
+
+    await Promise.all(
+      orgs
+        .filter((org) => org.kind === "operating" || org.kind === "sole_prop")
+        .map((org) => supabase.rpc("seed_food_safety_playbook", { _org: org.id })),
+    );
+
+    return orgs;
   });

@@ -91,6 +91,15 @@ export function RegisterCompanyGuide({
   const data = useQuery({
     queryKey: ["register-company", orgId],
     queryFn: async () => {
+      const { data: org } = await supabase
+        .from("organizations")
+        .select("kind")
+        .eq("id", orgId)
+        .maybeSingle();
+      if (org?.kind === "operating" || org?.kind === "sole_prop") {
+        await supabase.rpc("seed_food_safety_playbook", { _org: orgId });
+      }
+
       const [obs, links] = await Promise.all([
         supabase
           .from("obligations")

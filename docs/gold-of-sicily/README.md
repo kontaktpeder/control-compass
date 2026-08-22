@@ -7,7 +7,7 @@ To selskaper. To hauger. Huskelapper her, bevis i appen.
 | **Gold of Sicily Holding AS** | Holdingselskap | Aksjer, utlegg, skattemelding, Innoro |
 | **Gold of Sicily AS** | Driftsselskap | Arancini, Mattilsynet, Fiken, MVA |
 
-Opprett dem som **to organisasjoner** i Control Compass. Ikke slå dem sammen.
+Opprett dem som **to organisasjoner** i Control Compass — eller åpne dem hvis de allerede finnes. Ikke slå dem sammen. Driftsselskapet får Food Safety-sjekklisten automatisk ved neste åpning (holding får den ikke).
 
 ---
 
