@@ -41,9 +41,9 @@ function OrgShell() {
     to: "/o/$orgId/evidence" | "/o/$orgId/agreements" | "/o/$orgId/settings";
     labelKey: MessageKey;
     icon: typeof FileText;
-    search?: Record<string, never>;
+    search?: { mode?: "register" };
   }> = [
-    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText, search: {} },
+    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText, search: { mode: "register" } },
     { to: "/o/$orgId/agreements", labelKey: "nav.agreements", icon: FileSignature },
     { to: "/o/$orgId/settings", labelKey: "nav.settings", icon: Settings },
   ];
@@ -64,6 +64,11 @@ function OrgShell() {
               <Building2 className="h-4 w-4 text-muted-foreground" />
               <div className="min-w-0">
                 <p className="truncate text-sm font-medium">{org.data?.name ?? "…"}</p>
+                {org.data?.kind && (
+                  <p className="truncate text-xs text-muted-foreground">
+                    {t(`orgs.kind.${org.data.kind}` as MessageKey)}
+                  </p>
+                )}
                 <Link to="/orgs" className="text-xs text-muted-foreground hover:underline">{t("common.switch")}</Link>
               </div>
             </div>

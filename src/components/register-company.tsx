@@ -96,8 +96,9 @@ export function RegisterCompanyGuide({
         .select("kind")
         .eq("id", orgId)
         .maybeSingle();
-      if (org?.kind === "operating" || org?.kind === "sole_prop") {
-        await supabase.rpc("seed_food_safety_playbook", { _org: orgId });
+      if (org?.kind && org.kind !== "holding") {
+        const { error: seedErr } = await supabase.rpc("seed_food_safety_playbook", { _org: orgId });
+        if (seedErr) throw new Error(seedErr.message);
       }
 
       const [obs, links] = await Promise.all([
@@ -141,6 +142,14 @@ export function RegisterCompanyGuide({
   const requiredAndFood = [...required, ...food];
   const onFile = requiredAndFood.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
   const needsReview = obs.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
+
+  if (data.error) {
+    return (
+      <div className="mb-8 rounded-lg border border-border bg-card px-4 py-3">
+        <p className="text-sm text-status-missing">{data.error.message}</p>
+      </div>
+    );
+  }
 
   return (
     <div className="mb-8 rounded-lg border border-border bg-card">

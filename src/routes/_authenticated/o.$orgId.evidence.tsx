@@ -304,7 +304,7 @@ function DocumentsPage() {
         </div>
       }
     >
-      {registerMode && <RegisterCompanyGuide orgId={orgId} onReview={setReviewing} />}
+      <RegisterCompanyGuide orgId={orgId} onReview={setReviewing} />
 
       {documents.isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>

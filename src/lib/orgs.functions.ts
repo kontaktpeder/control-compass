@@ -41,7 +41,7 @@ export const createOrganization = createServerFn({ method: "POST" })
     const { error: seedErr } = await supabase.rpc("seed_incorporate_playbook", { _org: org.id });
     if (seedErr) throw new Error(seedErr.message);
 
-    if (data.kind === "operating" || data.kind === "sole_prop") {
+    if (data.kind !== "holding") {
       const { error: foodErr } = await supabase.rpc("seed_food_safety_playbook", { _org: org.id });
       if (foodErr) throw new Error(foodErr.message);
     }
@@ -62,7 +62,7 @@ export const listOrganizations = createServerFn({ method: "GET" })
 
     await Promise.all(
       orgs
-        .filter((org) => org.kind === "operating" || org.kind === "sole_prop")
+        .filter((org) => org.kind !== "holding")
         .map((org) => supabase.rpc("seed_food_safety_playbook", { _org: org.id })),
     );
 
