@@ -804,6 +804,7 @@ export type Database = {
       }
       is_member: { Args: { _org: string; _user: string }; Returns: boolean }
       is_org_owner: { Args: { _org: string; _user: string }; Returns: boolean }
+      seed_food_safety_playbook: { Args: { _org: string }; Returns: undefined }
       seed_incorporate_playbook: { Args: { _org: string }; Returns: undefined }
     }
     Enums: {

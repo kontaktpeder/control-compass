@@ -13,7 +13,7 @@ import {
 import { toast } from "sonner";
 import { FileText, ExternalLink } from "lucide-react";
 import { useT } from "@/components/locale-provider";
-import { localizeObligation } from "@/lib/playbook-i18n";
+import { isFoodSafetyObligationTitle, localizeObligation } from "@/lib/playbook-i18n";
 import { legalBasisForObligation } from "@/lib/legal-sources";
 
 type EvidenceLite = {
@@ -119,14 +119,18 @@ export function RegisterCompanyGuide({
   const byOb = data.data?.byOb ?? new Map<string, Assignment>();
   const obs = (data.data?.obs ?? []).map((o) => ({
     ...localizeObligation(locale, o),
+    englishTitle: o.title,
     legal: legalBasisForObligation(o.title, {
       legal_citation: o.legal_citation,
       legal_url: o.legal_url,
     }),
   }));
-  const required = obs.filter((o) => o.is_required !== false);
-  const company = obs.filter((o) => o.is_required === false);
-  const onFile = required.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
+  const food = obs.filter((o) => isFoodSafetyObligationTitle(o.englishTitle));
+  const corporate = obs.filter((o) => !isFoodSafetyObligationTitle(o.englishTitle));
+  const required = corporate.filter((o) => o.is_required !== false);
+  const company = corporate.filter((o) => o.is_required === false);
+  const requiredAndFood = [...required, ...food];
+  const onFile = requiredAndFood.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
   const needsReview = obs.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
 
   return (
@@ -136,7 +140,7 @@ export function RegisterCompanyGuide({
         <p className="mt-0.5 text-xs text-muted-foreground">{t("workflow.lede")}</p>
         <div className="mt-2 flex flex-wrap gap-4 text-xs">
           <span className="text-muted-foreground">
-            {t("workflow.requiredOnFile", { onFile, total: required.length })}
+            {t("workflow.requiredOnFile", { onFile, total: requiredAndFood.length })}
           </span>
           {needsReview > 0 && (
             <span className="text-status-partial">
@@ -159,6 +163,14 @@ export function RegisterCompanyGuide({
         subtitle={t("workflow.companySubtitle")}
         orgId={orgId}
         obligations={company}
+        byOb={byOb}
+        onReview={onReview}
+      />
+      <GuideSection
+        title={t("workflow.foodTitle")}
+        subtitle={t("workflow.foodSubtitle")}
+        orgId={orgId}
+        obligations={food}
         byOb={byOb}
         onReview={onReview}
       />

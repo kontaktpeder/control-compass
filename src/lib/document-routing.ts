@@ -173,6 +173,63 @@ const ROUTES: ObligationRoute[] = [
     category: "finance",
     keywords: ["arsregnskap", "årsregnskap", "annual accounts", "regnskapsregisteret"],
   },
+  {
+    title: "Mattilsynet Food Business Registration",
+    documentType: "Mattilsynet Registration",
+    purpose: "Food Safety",
+    category: "operations",
+    keywords: ["mattilsynet", "matvirksomhet", "food business registration"],
+  },
+  {
+    title: "Production Premises Hygiene",
+    documentType: "Premises Hygiene Description",
+    purpose: "Food Safety",
+    category: "operations",
+    keywords: ["produksjonslokale", "premises hygiene", "lokalebeskrivelse"],
+  },
+  {
+    title: "IK-Mat Procedures (HACCP)",
+    documentType: "HACCP Procedure",
+    purpose: "Food Safety",
+    category: "operations",
+    keywords: ["ik-mat", "ikmat", "haccp", "hygienerutiner"],
+  },
+  {
+    title: "Temperature Logging",
+    documentType: "Temperature Log",
+    purpose: "Food Safety",
+    category: "operations",
+    keywords: [
+      "temperaturlogg",
+      "temperature log",
+      "kjernetemperatur",
+      "cold chain",
+      "kjolekjede",
+      "kjølekjede",
+    ],
+  },
+  {
+    title: "Traceability Records",
+    documentType: "Traceability Log",
+    purpose: "Food Safety",
+    category: "operations",
+    keywords: ["sporbarhet", "traceability", "batchlogg", "lot number"],
+  },
+  {
+    title: "Allergen and Labelling Control",
+    documentType: "Allergen Label",
+    purpose: "Food Safety",
+    category: "operations",
+    keywords: [
+      "allergen",
+      "merking",
+      "labelling",
+      "labeling",
+      "naeringsdeklarasjon",
+      "næringsdeklarasjon",
+      "etikettmal",
+    ],
+  },
 ];
 
 const byTitle = new Map(ROUTES.map((r) => [r.title, r]));

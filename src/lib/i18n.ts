@@ -87,7 +87,8 @@ const en = {
     "Each organization is a legal entity with its own frameworks, obligations, evidence, and playbooks.",
   "orgs.new": "New organization",
   "orgs.createTitle": "Create organization",
-  "orgs.createHint": "A new organization is seeded with the Incorporate a Company playbook.",
+  "orgs.createHint":
+    "A new organization is seeded with the Incorporate a Company playbook. Operating companies also get Food Safety (Mattilsynet / IK-Mat).",
   "orgs.legalName": "Legal name",
   "orgs.orgNumber": "Org number (optional)",
   "orgs.entityType": "Entity type",
@@ -110,6 +111,9 @@ const en = {
   "workflow.companyTitle": "Company documents",
   "workflow.companySubtitle":
     "Recommended internal agreements. Not required by law, but good practice.",
+  "workflow.foodTitle": "Food safety (Mattilsynet)",
+  "workflow.foodSubtitle":
+    "Required to produce and sell food. Applies to the operating company, not the holding company.",
   "workflow.responsible": "Responsible:",
   "workflow.source": "Source",
   "workflow.noDocument": "No document yet.",
@@ -363,7 +367,8 @@ const nb: { [K in keyof typeof en]: string } = {
     "Hver organisasjon er en juridisk enhet med egne rammeverk, forpliktelser, dokumenter og playbooks.",
   "orgs.new": "Ny organisasjon",
   "orgs.createTitle": "Opprett organisasjon",
-  "orgs.createHint": "En ny organisasjon får playbooken Registrer selskap.",
+  "orgs.createHint":
+    "En ny organisasjon får playbooken Registrer selskap. Driftsselskap får også Mattrygghet (Mattilsynet / IK-Mat).",
   "orgs.legalName": "Juridisk navn",
   "orgs.orgNumber": "Organisasjonsnummer (valgfritt)",
   "orgs.entityType": "Selskapsform",
@@ -385,6 +390,9 @@ const nb: { [K in keyof typeof en]: string } = {
   "workflow.requiredSubtitle": "Lovpålagt for å stifte og drive selskapet.",
   "workflow.companyTitle": "Selskapsdokumenter",
   "workflow.companySubtitle": "Anbefalte interne avtaler. Ikke lovpålagt, men god praksis.",
+  "workflow.foodTitle": "Mattrygghet (Mattilsynet)",
+  "workflow.foodSubtitle":
+    "Påkrevd for å produsere og selge mat. Gjelder driftsselskapet, ikke holdingselskapet.",
   "workflow.responsible": "Ansvarlig:",
   "workflow.source": "Kilde",
   "workflow.noDocument": "Ingen dokument ennå.",

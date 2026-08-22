@@ -41,6 +41,11 @@ export const createOrganization = createServerFn({ method: "POST" })
     const { error: seedErr } = await supabase.rpc("seed_incorporate_playbook", { _org: org.id });
     if (seedErr) throw new Error(seedErr.message);
 
+    if (data.kind === "operating" || data.kind === "sole_prop") {
+      const { error: foodErr } = await supabase.rpc("seed_food_safety_playbook", { _org: org.id });
+      if (foodErr) throw new Error(foodErr.message);
+    }
+
     return { id: org.id };
   });
 

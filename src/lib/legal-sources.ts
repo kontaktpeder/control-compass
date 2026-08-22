@@ -69,6 +69,30 @@ export const PLAYBOOK_LEGAL_BASIS: Record<
     citation: "Regnskapsloven § 8-2",
     url: lovdataParagraphUrl("1998-07-17-56", "§8-2"),
   },
+  "Mattilsynet Food Business Registration": {
+    citation: "Næringsmiddelhygieneforskriften, jf. forordning (EF) nr. 852/2004 art. 6",
+    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+  },
+  "Production Premises Hygiene": {
+    citation: "Næringsmiddelhygieneforskriften vedlegg II",
+    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+  },
+  "IK-Mat Procedures (HACCP)": {
+    citation: "Næringsmiddelhygieneforskriften, jf. forordning (EF) nr. 852/2004 art. 5",
+    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+  },
+  "Temperature Logging": {
+    citation: "Næringsmiddelhygieneforskriften vedlegg II kap. IX",
+    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+  },
+  "Traceability Records": {
+    citation: "Matloven, jf. forordning (EF) nr. 178/2002 art. 18",
+    url: lovdataLawUrl("2003-12-19-124"),
+  },
+  "Allergen and Labelling Control": {
+    citation: "Matinformasjonsforskriften, jf. forordning (EU) nr. 1169/2011",
+    url: "https://lovdata.no/dokument/SF/forskrift/2014-11-28-1497",
+  },
 };
 
 export function legalBasisForObligation(

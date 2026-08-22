@@ -18,6 +18,7 @@ const FRAMEWORK_NB: Record<string, string> = {
   "Corporate Law": "Selskapsrett",
   Accounting: "Regnskap",
   Governance: "Styring",
+  "Food Safety": "Mattrygghet",
 };
 
 const SOURCE_NB: Record<string, string> = {
@@ -27,6 +28,9 @@ const SOURCE_NB: Record<string, string> = {
   "Bookkeeping Act (Bokføringsloven)": "Bokføringsloven",
   "VAT Act (Merverdiavgiftsloven)": "Merverdiavgiftsloven",
   "Working Environment Act (Arbeidsmiljøloven)": "Arbeidsmiljøloven",
+  "Food Act (Matloven)": "Matloven",
+  "Food Hygiene Regulation (Næringsmiddelhygieneforskriften)": "Næringsmiddelhygieneforskriften",
+  "Food Information Regulation (Matinformasjonsforskriften)": "Matinformasjonsforskriften",
 };
 
 const OBLIGATION_NB: Record<string, ObligationCopy> = {
@@ -144,7 +148,56 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
     responsible: "Regnskapsfører",
     evidence: ["Innsendt årsregnskap"],
   },
+  "Mattilsynet Food Business Registration": {
+    title: "Registrering av matvirksomhet hos Mattilsynet",
+    why: "En matvirksomhet må registreres hos Mattilsynet før produksjon eller salg. Gjennomført via næringsmiddelhygieneforskriften (forordning (EF) nr. 852/2004 art. 6).",
+    responsible: "Daglig leder",
+    evidence: ["Bekreftelse på registrering hos Mattilsynet"],
+  },
+  "Production Premises Hygiene": {
+    title: "Produksjonslokale (hygiene)",
+    why: "Lokalet må være egnet til matproduksjon: planløsning, vann, avfall, skadedyr og rene flater (næringsmiddelhygieneforskriften vedlegg II).",
+    responsible: "Daglig leder",
+    evidence: ["Lokalbeskrivelse eller plan", "Bilder eller tilsynsnotater"],
+  },
+  "IK-Mat Procedures (HACCP)": {
+    title: "IK-Mat-rutiner (HACCP)",
+    why: "Matvirksomheter skal ha HACCP-baserte rutiner for mottak, tilberedning, nedkjøling, oppbevaring og utlevering (forordning (EF) nr. 852/2004 art. 5).",
+    responsible: "Daglig leder",
+    evidence: ["Skriftlige IK-Mat- / HACCP-rutiner"],
+  },
+  "Temperature Logging": {
+    title: "Temperaturlogging",
+    why: "Kjølekjede og steketemperaturer skal styres og logges slik at usikker mat ikke slippes ut.",
+    responsible: "Daglig leder",
+    evidence: ["Temperaturlogg (kjøl / frys / steking / olje)"],
+  },
+  "Traceability Records": {
+    title: "Sporbarhetslogger",
+    why: "Du skal kunne spore råvarer ett steg bakover og ferdige varer ett steg frem (generell næringsmiddellov art. 18).",
+    responsible: "Daglig leder",
+    evidence: ["Batch- / lot-logg", "Leverandørliste"],
+  },
+  "Allergen and Labelling Control": {
+    title: "Allergener og merking",
+    why: "Ferdigpakket mat skal oppgi allergener og oppbevaringsbetingelser (matinformasjonsforskriften, forordning (EU) nr. 1169/2011).",
+    responsible: "Daglig leder",
+    evidence: ["Etikettmal", "Allergenliste"],
+  },
 };
+
+const FOOD_SAFETY_TITLES = new Set([
+  "Mattilsynet Food Business Registration",
+  "Production Premises Hygiene",
+  "IK-Mat Procedures (HACCP)",
+  "Temperature Logging",
+  "Traceability Records",
+  "Allergen and Labelling Control",
+]);
+
+export function isFoodSafetyObligationTitle(title: string) {
+  return FOOD_SAFETY_TITLES.has(title);
+}
 
 export function localizeRole(locale: Locale, role: string | null | undefined) {
   if (!role) return role ?? null;
