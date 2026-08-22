@@ -30,13 +30,12 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { X } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { localizeObligationTitle } from "@/lib/playbook-i18n";
 import { isDocumentCategory, type LibraryItem } from "@/lib/library";
 
 const documentsSearch = z.object({
-  mode: z.enum(["register"]).optional(),
+  mode: z.enum(["register", "food"]).optional(),
 });
 
 export const Route = createFileRoute("/_authenticated/o/$orgId/evidence")({
@@ -64,7 +63,6 @@ type AssignmentRow = {
 function DocumentsPage() {
   const { orgId } = useParams({ from: "/_authenticated/o/$orgId/evidence" });
   const { mode } = Route.useSearch();
-  const registerMode = mode === "register";
   const navigate = useNavigate();
   const qc = useQueryClient();
   const { t, locale } = useT();
@@ -78,11 +76,11 @@ function DocumentsPage() {
   const replaceHintIdRef = useRef<string | null>(null);
   const classify = useServerFn(classifyEvidence);
 
-  const setRegisterMode = (on: boolean) => {
+  const setMode = (next: "register" | "food" | undefined) => {
     void navigate({
       to: "/o/$orgId/evidence",
       params: { orgId },
-      search: on ? { mode: "register" } : {},
+      search: next ? { mode: next } : {},
     });
   };
 
@@ -304,7 +302,7 @@ function DocumentsPage() {
         </div>
       }
     >
-      <RegisterCompanyGuide orgId={orgId} onReview={setReviewing} />
+      {mode && <RegisterCompanyGuide orgId={orgId} topic={mode} onReview={setReviewing} />}
 
       {documents.isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
@@ -323,23 +321,20 @@ function DocumentsPage() {
           onToggleSelect={toggle}
           toolbarStart={
             <>
-              {registerMode ? (
-                <span className="inline-flex items-center rounded-md border border-border bg-secondary text-sm">
-                  <span className="px-2.5 py-1 font-medium">{t("library.registerMode")}</span>
-                  <button
-                    type="button"
-                    className="border-l border-border px-1.5 py-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-                    aria-label={t("library.exitMode")}
-                    onClick={() => setRegisterMode(false)}
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </span>
-              ) : (
-                <Button size="sm" variant="outline" onClick={() => setRegisterMode(true)}>
-                  {t("library.registerMode")}
-                </Button>
-              )}
+              <Button
+                size="sm"
+                variant={mode === "register" ? "secondary" : "outline"}
+                onClick={() => setMode(mode === "register" ? undefined : "register")}
+              >
+                {t("library.registerMode")}
+              </Button>
+              <Button
+                size="sm"
+                variant={mode === "food" ? "secondary" : "outline"}
+                onClick={() => setMode(mode === "food" ? undefined : "food")}
+              >
+                {t("library.foodMode")}
+              </Button>
               {selectedCount > 0 && (
                 <Button
                   size="sm"

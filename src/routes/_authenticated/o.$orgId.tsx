@@ -41,9 +41,9 @@ function OrgShell() {
     to: "/o/$orgId/evidence" | "/o/$orgId/agreements" | "/o/$orgId/settings";
     labelKey: MessageKey;
     icon: typeof FileText;
-    search?: { mode?: "register" };
+    search?: { mode?: "register" | "food" };
   }> = [
-    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText, search: { mode: "register" } },
+    { to: "/o/$orgId/evidence", labelKey: "nav.documents", icon: FileText, search: {} },
     { to: "/o/$orgId/agreements", labelKey: "nav.agreements", icon: FileSignature },
     { to: "/o/$orgId/settings", labelKey: "nav.settings", icon: Settings },
   ];

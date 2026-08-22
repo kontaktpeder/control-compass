@@ -114,6 +114,9 @@ const en = {
   "workflow.foodTitle": "Food safety (Mattilsynet)",
   "workflow.foodSubtitle":
     "Required to produce and sell food. Applies to the operating company, not the holding company.",
+  "workflow.foodHoldingHint":
+    "This is the holding company. Open the operating company (Gold of Sicily AS) and choose Mattrygghet.",
+  "workflow.foodEmpty": "The food-safety checklist did not load. Refresh the page, or check that this is the operating company.",
   "workflow.responsible": "Responsible:",
   "workflow.source": "Source",
   "workflow.noDocument": "No document yet.",
@@ -135,7 +138,8 @@ const en = {
   "library.layoutGrid": "Grid",
   "library.layoutList": "List",
   "library.registerMode": "Register company",
-  "library.exitMode": "Exit register company",
+  "library.foodMode": "Food safety",
+  "library.exitMode": "Back to documents",
   "library.backToLibrary": "All documents",
   "library.more": "More",
   "library.empty": "No documents yet.",
@@ -393,6 +397,10 @@ const nb: { [K in keyof typeof en]: string } = {
   "workflow.foodTitle": "Mattrygghet (Mattilsynet)",
   "workflow.foodSubtitle":
     "Påkrevd for å produsere og selge mat. Gjelder driftsselskapet, ikke holdingselskapet.",
+  "workflow.foodHoldingHint":
+    "Dette er holdingselskapet. Åpne driftsselskapet (Gold of Sicily AS) og velg Mattrygghet.",
+  "workflow.foodEmpty":
+    "Mattrygghet-sjekklisten lastet ikke. Oppdater siden, eller sjekk at du er i driftsselskapet.",
   "workflow.responsible": "Ansvarlig:",
   "workflow.source": "Kilde",
   "workflow.noDocument": "Ingen dokument ennå.",
@@ -414,7 +422,8 @@ const nb: { [K in keyof typeof en]: string } = {
   "library.layoutGrid": "Rutenett",
   "library.layoutList": "Liste",
   "library.registerMode": "Registrer selskap",
-  "library.exitMode": "Avslutt registrer selskap",
+  "library.foodMode": "Mattrygghet",
+  "library.exitMode": "Tilbake til dokumenter",
   "library.backToLibrary": "Alle dokumenter",
   "library.more": "Mer",
   "library.empty": "Ingen dokumenter ennå.",

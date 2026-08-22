@@ -82,21 +82,23 @@ function lifecycleFor(a: Assignment | undefined): DocLifecycle {
 export function RegisterCompanyGuide({
   orgId,
   onReview,
+  topic,
 }: {
   orgId: string;
   onReview: (a: ReviewAssignment) => void;
+  topic: "register" | "food";
 }) {
   const { t, locale } = useT();
 
   const data = useQuery({
-    queryKey: ["register-company", orgId],
+    queryKey: ["register-company", orgId, topic],
     queryFn: async () => {
       const { data: org } = await supabase
         .from("organizations")
         .select("kind")
         .eq("id", orgId)
         .maybeSingle();
-      if (org?.kind && org.kind !== "holding") {
+      if (topic === "food" && org?.kind && org.kind !== "holding") {
         const { error: seedErr } = await supabase.rpc("seed_food_safety_playbook", { _org: orgId });
         if (seedErr) throw new Error(seedErr.message);
       }
@@ -122,11 +124,12 @@ export function RegisterCompanyGuide({
       for (const l of (links.data ?? []) as unknown as Assignment[]) {
         if (l.obligation_id) byOb.set(l.obligation_id, l);
       }
-      return { obs: (obs.data ?? []) as unknown as ObligationRow[], byOb };
+      return { obs: (obs.data ?? []) as unknown as ObligationRow[], byOb, kind: org?.kind ?? null };
     },
   });
 
   const byOb = data.data?.byOb ?? new Map<string, Assignment>();
+  const kind = data.data?.kind ?? null;
   const obs = (data.data?.obs ?? []).map((o) => ({
     ...localizeObligation(locale, o),
     englishTitle: o.title,
@@ -139,9 +142,9 @@ export function RegisterCompanyGuide({
   const corporate = obs.filter((o) => !isFoodSafetyObligationTitle(o.englishTitle));
   const required = corporate.filter((o) => o.is_required !== false);
   const company = corporate.filter((o) => o.is_required === false);
-  const requiredAndFood = [...required, ...food];
-  const onFile = requiredAndFood.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
-  const needsReview = obs.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
+  const shown = topic === "food" ? food : [...required, ...company];
+  const onFile = shown.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
+  const needsReview = shown.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
 
   if (data.error) {
     return (
@@ -154,11 +157,15 @@ export function RegisterCompanyGuide({
   return (
     <div className="mb-8 rounded-lg border border-border bg-card">
       <div className="border-b border-border px-4 py-3">
-        <p className="text-sm font-medium">{t("workflow.title")}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{t("workflow.lede")}</p>
+        <p className="text-sm font-medium">
+          {topic === "food" ? t("workflow.foodTitle") : t("workflow.title")}
+        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">
+          {topic === "food" ? t("workflow.foodSubtitle") : t("workflow.lede")}
+        </p>
         <div className="mt-2 flex flex-wrap gap-4 text-xs">
           <span className="text-muted-foreground">
-            {t("workflow.requiredOnFile", { onFile, total: requiredAndFood.length })}
+            {t("workflow.requiredOnFile", { onFile, total: shown.length })}
           </span>
           {needsReview > 0 && (
             <span className="text-status-partial">
@@ -168,30 +175,44 @@ export function RegisterCompanyGuide({
         </div>
       </div>
 
-      <GuideSection
-        title={t("workflow.requiredTitle")}
-        subtitle={t("workflow.requiredSubtitle")}
-        orgId={orgId}
-        obligations={required}
-        byOb={byOb}
-        onReview={onReview}
-      />
-      <GuideSection
-        title={t("workflow.companyTitle")}
-        subtitle={t("workflow.companySubtitle")}
-        orgId={orgId}
-        obligations={company}
-        byOb={byOb}
-        onReview={onReview}
-      />
-      <GuideSection
-        title={t("workflow.foodTitle")}
-        subtitle={t("workflow.foodSubtitle")}
-        orgId={orgId}
-        obligations={food}
-        byOb={byOb}
-        onReview={onReview}
-      />
+      {topic === "register" && (
+        <>
+          <GuideSection
+            title={t("workflow.requiredTitle")}
+            subtitle={t("workflow.requiredSubtitle")}
+            orgId={orgId}
+            obligations={required}
+            byOb={byOb}
+            onReview={onReview}
+          />
+          <GuideSection
+            title={t("workflow.companyTitle")}
+            subtitle={t("workflow.companySubtitle")}
+            orgId={orgId}
+            obligations={company}
+            byOb={byOb}
+            onReview={onReview}
+          />
+        </>
+      )}
+      {topic === "food" && kind === "holding" && (
+        <p className="px-4 py-4 text-sm text-muted-foreground">{t("workflow.foodHoldingHint")}</p>
+      )}
+      {topic === "food" && kind !== "holding" && (
+        <>
+          {food.length === 0 && !data.isLoading && (
+            <p className="px-4 py-4 text-sm text-muted-foreground">{t("workflow.foodEmpty")}</p>
+          )}
+          <GuideSection
+            title={t("workflow.foodTitle")}
+            subtitle={t("workflow.foodSubtitle")}
+            orgId={orgId}
+            obligations={food}
+            byOb={byOb}
+            onReview={onReview}
+          />
+        </>
+      )}
     </div>
   );
 }
