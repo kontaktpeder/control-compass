@@ -39,6 +39,7 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
   const [category, setCategory] = useState<string>(NONE);
   const [ownerId, setOwnerId] = useState<string>(NONE);
   const [reviewDueAt, setReviewDueAt] = useState("");
+  const [fileName, setFileName] = useState("");
   const [busy, setBusy] = useState(false);
 
   const doc = useQuery({
@@ -83,7 +84,8 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
     setCategory(doc.data.category ?? NONE);
     setOwnerId(doc.data.responsible_user_id ?? NONE);
     setReviewDueAt(doc.data.review_due_at ?? "");
-  }, [doc.data?.id, doc.data?.category, doc.data?.responsible_user_id, doc.data?.review_due_at]);
+    setFileName(doc.data.file_name ?? "");
+  }, [doc.data?.id, doc.data?.category, doc.data?.responsible_user_id, doc.data?.review_due_at, doc.data?.file_name]);
 
   const handleSave = async () => {
     if (!evidenceId) return;
@@ -92,6 +94,7 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
       await saveFn({
         data: {
           evidence_id: evidenceId,
+          file_name: fileName.trim() || undefined,
           category: category === NONE ? null : (category as DocumentCategory),
           responsible_user_id: ownerId === NONE ? null : ownerId,
           review_due_at: reviewDueAt.trim() ? reviewDueAt : null,
@@ -122,7 +125,14 @@ export function DocumentMetaSheet({ open, onOpenChange, orgId, evidenceId }: Pro
         </SheetHeader>
 
         <div className="mt-6 space-y-5">
-          <p className="truncate text-sm font-medium">{doc.data?.file_name ?? "…"}</p>
+          <div className="space-y-2">
+            <Label htmlFor="meta-filename">{t("meta.fileName")}</Label>
+            <Input
+              id="meta-filename"
+              value={fileName}
+              onChange={(e) => setFileName(e.target.value)}
+            />
+          </div>
 
           {doc.data?.ai_summary && (
             <p className="flex items-start gap-1.5 text-sm text-muted-foreground">

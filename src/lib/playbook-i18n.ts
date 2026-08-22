@@ -53,10 +53,10 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
     evidence: ["Bankbekreftelse på innbetalt kapital"],
   },
   "Brønnøysund Registration (Foretaksregisteret)": {
-    title: "Registrering i Foretaksregisteret",
-    why: "Selskapet må registreres i Foretaksregisteret innen tre måneder etter stiftelse (aksjeloven § 2-18).",
+    title: "Registrering i Enhetsregisteret og Foretaksregisteret",
+    why: "Selskapet må registreres i Enhetsregisteret og, for et AS, i Foretaksregisteret innen tre måneder etter stiftelse (aksjeloven § 2-18). Firmaattest eller registerutskrift er gyldig bevis.",
     responsible: "Daglig leder",
-    evidence: ["Firmaattest"],
+    evidence: ["Firmaattest eller registerutskrift"],
   },
   "Managing Director & Board Appointment": {
     title: "Utnevnelse av daglig leder og styre",
@@ -105,6 +105,12 @@ const OBLIGATION_NB: Record<string, ObligationCopy> = {
     why: "Aksjeloven § 4-5 krever at selskapet fører aksjeeierbok.",
     responsible: "Daglig leder",
     evidence: ["Aksjeeierbok"],
+  },
+  "Beneficial Owners Register (Reelle rettighetshavere)": {
+    title: "Register over reelle rettighetshavere",
+    why: "Nesten alle norske virksomheter (AS og de fleste ENK) må kartlegge og registrere reelle rettighetshavere i Altinn — den som eier eller kontrollerer mer enn 25 %, eller utøver kontroll på annen måte. Send inn skjemaet også hvis ingen oppfyller terskelen.",
+    responsible: "Daglig leder",
+    evidence: ["Bekreftelse fra registeret over reelle rettighetshavere"],
   },
   "First Board Minutes": {
     title: "Første styreprotokoll",

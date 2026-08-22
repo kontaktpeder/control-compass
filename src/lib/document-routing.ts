@@ -54,7 +54,15 @@ const ROUTES: ObligationRoute[] = [
     documentType: "Registration Certificate",
     purpose: "Corporate Governance",
     category: "contracts",
-    keywords: ["firmaattest", "foretaksregister", "bronnoysund", "bronnøysund", "brønnøysund"],
+    keywords: [
+      "firmaattest",
+      "foretaksregister",
+      "enhetsregister",
+      "registerutskrift",
+      "bronnoysund",
+      "bronnøysund",
+      "brønnøysund",
+    ],
   },
   {
     title: "Managing Director & Board Appointment",
@@ -117,6 +125,18 @@ const ROUTES: ObligationRoute[] = [
     purpose: "Ownership",
     category: "contracts",
     keywords: ["aksjeeierbok", "aksjonaerregister", "aksjonærregister", "shareholder register"],
+  },
+  {
+    title: "Beneficial Owners Register (Reelle rettighetshavere)",
+    documentType: "Beneficial Owners Registration",
+    purpose: "Ownership",
+    category: "contracts",
+    keywords: [
+      "reelle rettighetshavere",
+      "rettighetshavere",
+      "beneficial owner",
+      "beneficial owners",
+    ],
   },
   {
     title: "First Board Minutes",

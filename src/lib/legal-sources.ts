@@ -45,6 +45,10 @@ export const PLAYBOOK_LEGAL_BASIS: Record<
     citation: "Aksjeloven § 4-5",
     url: lovdataParagraphUrl("1997-06-13-44", "§4-5"),
   },
+  "Beneficial Owners Register (Reelle rettighetshavere)": {
+    citation: "Brønnøysund: Reelle rettighetshavere",
+    url: "https://www.brreg.no/om-oss/oppgavene-vare/alle-registerne-vare/register-over-reelle-rettighetshavere/",
+  },
   "First Board Minutes": {
     citation: "Aksjeloven § 6-29",
     url: lovdataParagraphUrl("1997-06-13-44", "§6-29"),

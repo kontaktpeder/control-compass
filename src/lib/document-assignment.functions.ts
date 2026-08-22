@@ -4,8 +4,9 @@ import { requireSupabaseAuth } from "@/integrations/supabase/auth-middleware";
 
 /**
  * Document Assignment = the relationship between a requirement (obligation)
- * and the document currently satisfying it. In v1 this lives on
- * `evidence_links` with `UNIQUE(obligation_id)`.
+ * and a document that supports it. Lives on `evidence_links` with
+ * UNIQUE(evidence_id, obligation_id) — one file may support several
+ * requirements, and one requirement may have several files.
  *
  * Rules:
  *  - Only two statuses: `needs_review` | `verified`.

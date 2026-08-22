@@ -9,6 +9,7 @@ import { toast } from "sonner";
 import { Upload, RefreshCw, Plus } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useT } from "@/components/locale-provider";
+import { localizeObligationTitle } from "@/lib/playbook-i18n";
 
 type Props = {
   orgId: string;
@@ -51,7 +52,7 @@ export const DocumentUpload = forwardRef<DocumentUploadHandle, Props>(function D
   ref,
 ) {
   const qc = useQueryClient();
-  const { t } = useT();
+  const { t, locale } = useT();
   const classify = useServerFn(classifyEvidence);
   const replaceEv = useServerFn(replaceAssignmentEvidence);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -99,16 +100,21 @@ export const DocumentUpload = forwardRef<DocumentUploadHandle, Props>(function D
       }
 
       toast.info(t("upload.understanding"));
-      await classify({
+      const classified = (await classify({
         data: {
           evidence_id: row.id,
           hint_obligation_id: hintId,
           upload_context: context,
         },
-      });
+      })) as { linked_titles?: string[] } | undefined;
 
+      const titles = (classified?.linked_titles ?? []).map((title) =>
+        localizeObligationTitle(locale, title),
+      );
       toast.success(
-        mode === "replace" ? t("upload.replaced") : t("upload.uploaded")
+        titles.length
+          ? t("upload.linkedTo", { titles: titles.join(", ") })
+          : t("upload.savedInAll"),
       );
 
       await qc.invalidateQueries();

@@ -28,6 +28,7 @@ type EvidenceLite = {
   id: string;
   file_name: string;
   file_path: string;
+  mime_type: string | null;
   document_type_candidates: Array<{ label: string; confidence: number }> | null;
   purpose_candidates: Array<{ label: string; confidence: number }> | null;
 };
@@ -69,6 +70,7 @@ function toReview(a: Assignment, ob: { id: string; title: string }): ReviewAssig
     evidence_id: a.evidence.id,
     file_name: a.evidence.file_name,
     file_path: a.evidence.file_path,
+    mime_type: a.evidence.mime_type,
     document_type: a.document_type,
     purpose: a.purpose,
     ai_document_type: a.ai_document_type,
@@ -82,18 +84,20 @@ function toReview(a: Assignment, ob: { id: string; title: string }): ReviewAssig
   };
 }
 
-function lifecycleFor(a: Assignment | undefined): DocLifecycle {
-  if (!a) return "no_document";
-  return a.status === "verified" ? "on_file" : "needs_review";
+function lifecycleFor(list: Assignment[]): DocLifecycle {
+  if (list.length === 0) return "no_document";
+  return list.some((a) => a.status !== "verified") ? "needs_review" : "on_file";
 }
 
 export function RegisterCompanyGuide({
   orgId,
   onReview,
+  onFiled,
   topic,
 }: {
   orgId: string;
   onReview: (a: ReviewAssignment) => void;
+  onFiled?: (evidenceId: string) => void;
   topic: "register" | "food";
 }) {
   const { t, locale } = useT();
@@ -136,20 +140,23 @@ export function RegisterCompanyGuide({
         supabase
           .from("evidence_links")
           .select(
-            "id, obligation_id, evidence_id, status, document_type, purpose, ai_document_type, ai_document_type_confidence, ai_purpose, ai_purpose_confidence, ai_summary, ai_reasoning_full, evidence:evidence_id(id, file_name, file_path, document_type_candidates, purpose_candidates)",
+            "id, obligation_id, evidence_id, status, document_type, purpose, ai_document_type, ai_document_type_confidence, ai_purpose, ai_purpose_confidence, ai_summary, ai_reasoning_full, evidence:evidence_id(id, file_name, file_path, mime_type, document_type_candidates, purpose_candidates)",
           )
           .eq("org_id", orgId),
       ]);
 
-      const byOb = new Map<string, Assignment>();
+      const byOb = new Map<string, Assignment[]>();
       for (const l of (links.data ?? []) as unknown as Assignment[]) {
-        if (l.obligation_id) byOb.set(l.obligation_id, l);
+        if (!l.obligation_id) continue;
+        const list = byOb.get(l.obligation_id) ?? [];
+        list.push(l);
+        byOb.set(l.obligation_id, list);
       }
       return { obs: (obs.data ?? []) as unknown as ObligationRow[], byOb, kind: org?.kind ?? null };
     },
   });
 
-  const byOb = data.data?.byOb ?? new Map<string, Assignment>();
+  const byOb = data.data?.byOb ?? new Map<string, Assignment[]>();
   const kind = data.data?.kind ?? null;
   const obs = (data.data?.obs ?? []).map((o) => ({
     ...localizeObligation(locale, o),
@@ -164,16 +171,18 @@ export function RegisterCompanyGuide({
   const required = corporate.filter((o) => o.is_required !== false);
   const company = corporate.filter((o) => o.is_required === false);
   const shown = topic === "food" ? food : [...required, ...company];
-  const onFile = shown.filter((o) => lifecycleFor(byOb.get(o.id)) === "on_file").length;
-  const needsReview = shown.filter((o) => lifecycleFor(byOb.get(o.id)) === "needs_review").length;
+  const onFile = shown.filter((o) => lifecycleFor(byOb.get(o.id) ?? []) === "on_file").length;
+  const needsReview = shown.filter((o) => lifecycleFor(byOb.get(o.id) ?? []) === "needs_review").length;
 
   const titlesByEvidence = new Map<string, string[]>();
   for (const o of obs) {
-    const evId = byOb.get(o.id)?.evidence?.id;
-    if (!evId) continue;
-    const list = titlesByEvidence.get(evId) ?? [];
-    list.push(o.title);
-    titlesByEvidence.set(evId, list);
+    for (const a of byOb.get(o.id) ?? []) {
+      const evId = a.evidence?.id;
+      if (!evId) continue;
+      const list = titlesByEvidence.get(evId) ?? [];
+      list.push(o.title);
+      titlesByEvidence.set(evId, list);
+    }
   }
 
   if (data.error) {
@@ -211,6 +220,7 @@ export function RegisterCompanyGuide({
             titlesByEvidence={titlesByEvidence}
             onReview={onReview}
             onUnlink={unlinkFromRequirement}
+            onFiled={onFiled}
           />
           <GuideGroup
             label={t("workflow.companyTitle")}
@@ -220,6 +230,7 @@ export function RegisterCompanyGuide({
             titlesByEvidence={titlesByEvidence}
             onReview={onReview}
             onUnlink={unlinkFromRequirement}
+            onFiled={onFiled}
           />
         </div>
       )}
@@ -241,6 +252,7 @@ export function RegisterCompanyGuide({
           titlesByEvidence={titlesByEvidence}
           onReview={onReview}
           onUnlink={unlinkFromRequirement}
+          onFiled={onFiled}
         />
       )}
     </div>
@@ -255,16 +267,18 @@ function GuideGroup({
   titlesByEvidence,
   onReview,
   onUnlink,
+  onFiled,
 }: {
   label?: string;
   orgId: string;
   obligations: Array<
     ObligationRow & { legal: { citation: string; url: string } | null }
   >;
-  byOb: Map<string, Assignment>;
+  byOb: Map<string, Assignment[]>;
   titlesByEvidence: Map<string, string[]>;
   onReview: (a: ReviewAssignment) => void;
   onUnlink: (assignmentId: string) => void;
+  onFiled?: (evidenceId: string) => void;
 }) {
   const { t } = useT();
   if (obligations.length === 0) return null;
@@ -278,11 +292,10 @@ function GuideGroup({
       )}
       <Accordion type="single" collapsible className="overflow-hidden rounded-lg border border-border bg-card">
         {obligations.map((o) => {
-          const assignment = byOb.get(o.id);
-          const lifecycle = lifecycleFor(assignment);
-          const ev = assignment?.evidence ?? null;
-          const openReview = () => {
-            if (!assignment) return;
+          const assignments = byOb.get(o.id) ?? [];
+          const lifecycle = lifecycleFor(assignments);
+          const pending = assignments.find((a) => a.status !== "verified" && a.evidence);
+          const openReview = (assignment: Assignment) => {
             const r = toReview(assignment, { id: o.id, title: o.title });
             if (r) onReview(r);
           };
@@ -293,7 +306,7 @@ function GuideGroup({
                   <span className="min-w-0 flex-1 truncate text-left text-sm">{o.title}</span>
                 </AccordionTrigger>
                 <DocumentStatusPill state={lifecycle} className="shrink-0" />
-                {assignment ? (
+                {assignments.length > 0 ? (
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button
@@ -308,12 +321,17 @@ function GuideGroup({
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                      <DropdownMenuItem
-                        className="text-destructive focus:text-destructive"
-                        onSelect={() => onUnlink(assignment.id)}
-                      >
-                        {t("workflow.unlink")}
-                      </DropdownMenuItem>
+                      {assignments.map((a) => (
+                        <DropdownMenuItem
+                          key={a.id}
+                          className="text-destructive focus:text-destructive"
+                          onSelect={() => onUnlink(a.id)}
+                        >
+                          {assignments.length > 1
+                            ? `${t("workflow.unlink")} (${a.evidence?.file_name ?? a.id.slice(0, 6)})`
+                            : t("workflow.unlink")}
+                        </DropdownMenuItem>
+                      ))}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 ) : (
@@ -347,58 +365,63 @@ function GuideGroup({
                       ))}
                     </ul>
                   )}
-                  {ev && (
-                    <div className="space-y-1">
-                      <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
-                        <FileText className="h-3 w-3 shrink-0" />
-                        <span className="truncate">{ev.file_name}</span>
-                      </p>
-                      {(titlesByEvidence.get(ev.id) ?? []).filter((title) => title !== o.title)
-                        .length > 0 && (
-                        <p className="text-xs text-status-partial">
-                          {t("workflow.alsoLinked", {
-                            titles: (titlesByEvidence.get(ev.id) ?? [])
-                              .filter((title) => title !== o.title)
-                              .join(", "),
-                          })}
+                  {assignments.map((a) => {
+                    const ev = a.evidence;
+                    if (!ev) return null;
+                    const also = (titlesByEvidence.get(ev.id) ?? []).filter((title) => title !== o.title);
+                    return (
+                      <div key={a.id} className="space-y-1">
+                        <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
+                          <FileText className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{ev.file_name}</span>
                         </p>
-                      )}
-                    </div>
-                  )}
+                        {also.length > 0 && (
+                          <p className="text-xs text-status-partial">
+                            {t("workflow.alsoLinked", { titles: also.join(", ") })}
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
                   <div className="flex flex-wrap items-center gap-2">
-                    {lifecycle === "no_document" && (
-                      <DocumentUpload
-                        orgId={orgId}
-                        hintObligationId={o.id}
-                        context="workflow"
-                        size="sm"
-                        variant="default"
-                        label={t("common.upload")}
-                      />
-                    )}
-                    {lifecycle === "needs_review" && assignment && (
-                      <Button size="sm" onClick={openReview}>
+                    <DocumentUpload
+                      orgId={orgId}
+                      hintObligationId={o.id}
+                      context="workflow"
+                      size="sm"
+                      variant={lifecycle === "no_document" ? "default" : "outline"}
+                      label={lifecycle === "no_document" ? t("common.upload") : t("workflow.addFile")}
+                      onAfterUpload={onFiled}
+                    />
+                    {pending && (
+                      <Button size="sm" onClick={() => openReview(pending)}>
                         {t("workflow.reviewNow")}
                       </Button>
                     )}
-                    {lifecycle === "on_file" && ev && assignment && (
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={async () => {
-                          const { data, error } = await supabase.storage
-                            .from("evidence")
-                            .createSignedUrl(ev.file_path, 60);
-                          if (error || !data?.signedUrl) {
-                            toast.error(error?.message ?? t("workflow.openFailed"));
-                            return;
-                          }
-                          window.open(data.signedUrl, "_blank", "noopener,noreferrer");
-                        }}
-                      >
-                        {t("common.view")}
-                      </Button>
-                    )}
+                    {lifecycle === "on_file" &&
+                      assignments.map((a) => {
+                        const ev = a.evidence;
+                        if (!ev) return null;
+                        return (
+                          <Button
+                            key={a.id}
+                            size="sm"
+                            variant="outline"
+                            onClick={async () => {
+                              const { data, error } = await supabase.storage
+                                .from("evidence")
+                                .createSignedUrl(ev.file_path, 60);
+                              if (error || !data?.signedUrl) {
+                                toast.error(error?.message ?? t("workflow.openFailed"));
+                                return;
+                              }
+                              window.open(data.signedUrl, "_blank", "noopener,noreferrer");
+                            }}
+                          >
+                            {t("common.view")}
+                          </Button>
+                        );
+                      })}
                   </div>
                 </div>
               </AccordionContent>

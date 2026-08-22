@@ -11,6 +11,7 @@ import {
   routingSummary,
   type ObligationRoute,
 } from "@/lib/document-routing";
+import { isOpaqueFileName, suggestedDisplayName } from "@/lib/file-name";
 
 function tryParseJson(raw: string | undefined): any {
   if (!raw) return null;
@@ -68,6 +69,7 @@ async function syncEvidenceAssignments(
     ? await supabase
         .from("evidence_links")
         .select("id, obligation_id, evidence_id")
+        .eq("evidence_id", args.evidenceId)
         .in("obligation_id", candidateArr)
     : { data: [] as Array<{ id: string; obligation_id: string; evidence_id: string }> };
 
@@ -94,27 +96,12 @@ async function syncEvidenceAssignments(
     }
 
     const existing = existingByOb.get(t.obligationId);
-    const isHint = t.obligationId === args.hintOb;
     if (existing) {
-      if (existing.evidence_id === args.evidenceId) {
-        await supabase
-          .from("evidence_links")
-          .update(patch as never)
-          .eq("id", existing.id);
-        linked.push(t.obligationId);
-      } else if (isHint) {
-        await supabase
-          .from("evidence_links")
-          .update({
-            ...patch,
-            evidence_id: args.evidenceId,
-            status: "needs_review",
-            verified_by: null,
-            verified_at: null,
-          } as never)
-          .eq("id", existing.id);
-        linked.push(t.obligationId);
-      }
+      await supabase
+        .from("evidence_links")
+        .update(patch as never)
+        .eq("id", existing.id);
+      linked.push(t.obligationId);
     } else {
       const { error: insErr } = await supabase.from("evidence_links").insert({
         org_id: args.orgId,
@@ -159,18 +146,28 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       .single();
     if (error || !ev) throw new Error(error?.message ?? "Evidence not found");
 
+    const { data: org } = await supabase
+      .from("organizations")
+      .select("name")
+      .eq("id", ev.org_id)
+      .maybeSingle();
+    const orgName = org?.name ?? "";
+
     const { data: obligations } = await supabase
       .from("obligations")
       .select("id, title, why, evidence_requirements")
       .eq("org_id", ev.org_id);
 
     const validIds = new Set((obligations ?? []).map((o) => o.id));
+    const titleById = new Map((obligations ?? []).map((o) => [o.id, o.title]));
     const hintOb =
       data.hint_obligation_id && validIds.has(data.hint_obligation_id)
         ? data.hint_obligation_id
         : null;
     const filenameMatches = matchObligationsByFilename(ev.file_name, obligations ?? []);
-    const useRouting = !data.force_ai && (!!hintOb || filenameMatches.length > 0);
+    const opaqueName = isOpaqueFileName(ev.file_name);
+    const useRouting =
+      !data.force_ai && !opaqueName && (!!hintOb || filenameMatches.length > 0);
 
     if (useRouting) {
       const byId = new Map((obligations ?? []).map((o) => [o.id, o]));
@@ -269,6 +266,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
         classification_status: "direct_evidence" as ClassificationStatus,
         summary,
         linked_obligation_ids: linkedArray,
+        linked_titles: linkedArray.map((id) => titleById.get(id) ?? id),
+        suggested_file_name: suggestedDisplayName(orgName, primaryType, ev.file_name),
         category: ev.category ?? primaryCategory,
         ai_category: primaryCategory,
         used_ai: false,
@@ -570,22 +569,17 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       .eq("id", ev.id);
 
     // --- Stage 5: assignment updates ---------------------------------------
-    // Rules:
-    //  - Workflow uploads with a hint: always own the hinted obligation's
-    //    assignment (create or replace the pointer + AI fields).
-    //  - Library / AI-matched obligations: only CREATE assignments where the
-    //    obligation has no assignment yet. Never silently replace another
-    //    document a human already put on that obligation.
-    //  - AI never sets status = verified.
+    // A requirement may already have other files. Never replace them; add this
+    // file as another link when it matches.
     const candidateObs = new Set<string>(linkedIds);
     if (hintOb) candidateObs.add(hintOb);
     const candidateArr = Array.from(candidateObs);
 
-    // Which of these obligations already have an assignment?
     const { data: existingLinks } = candidateArr.length
       ? await supabase
           .from("evidence_links")
           .select("id, obligation_id, evidence_id")
+          .eq("evidence_id", ev.id)
           .in("obligation_id", candidateArr)
       : { data: [] as Array<{ id: string; obligation_id: string; evidence_id: string }> };
 
@@ -609,34 +603,13 @@ export const classifyEvidence = createServerFn({ method: "POST" })
 
     for (const obId of candidateArr) {
       const existing = existingByOb.get(obId);
-      const isHint = obId === hintOb;
 
       if (existing) {
-        if (existing.evidence_id === ev.id) {
-          // Same evidence already assigned — refresh AI fields, keep status.
-          await supabase
-            .from("evidence_links")
-            .update(aiPatch as never)
-            .eq("id", existing.id);
-          linkedArray.push(obId);
-        } else if (isHint) {
-          // Workflow-driven replace: swap evidence + reset to needs_review.
-          await supabase
-            .from("evidence_links")
-            .update({
-              ...aiPatch,
-              evidence_id: ev.id,
-              status: "needs_review",
-              verified_by: null,
-              verified_at: null,
-              document_type: null,
-              purpose: null,
-            } as never)
-            .eq("id", existing.id);
-          linkedArray.push(obId);
-        }
-        // Else: obligation already has a different document from another
-        // upload — do NOT overwrite it silently. Skip.
+        await supabase
+          .from("evidence_links")
+          .update(aiPatch as never)
+          .eq("id", existing.id);
+        linkedArray.push(obId);
       } else {
         const { error: insErr } = await supabase.from("evidence_links").insert({
           org_id: ev.org_id,
@@ -659,6 +632,8 @@ export const classifyEvidence = createServerFn({ method: "POST" })
       classification_status,
       summary: identified.summary,
       linked_obligation_ids: linkedArray,
+      linked_titles: linkedArray.map((id) => titleById.get(id) ?? id),
+      suggested_file_name: suggestedDisplayName(orgName, primaryDoc?.label, ev.file_name),
       category: ev.category ?? suggestedCategory,
       ai_category: suggestedCategory,
       used_ai: true,

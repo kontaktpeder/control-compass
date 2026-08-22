@@ -34,6 +34,7 @@ import { toast } from "sonner";
 import { useT } from "@/components/locale-provider";
 import { localizeObligationTitle } from "@/lib/playbook-i18n";
 import { isDocumentCategory, type LibraryItem } from "@/lib/library";
+import { suggestedDisplayName } from "@/lib/file-name";
 
 const documentsSearch = z.object({
   mode: z.enum(["register", "food"]).optional(),
@@ -193,26 +194,85 @@ function DocumentsPage() {
   };
 
   const openReview = (d: LibraryItem) => {
-    if (!d.assignment || !d.obligation) return;
     const a = d.assignment;
     setReviewing({
-      assignment_id: a.id,
-      obligation_id: d.obligation.id,
-      obligation_title: localizeObligationTitle(locale, d.obligation.title),
-      status: a.status,
+      assignment_id: a?.id ?? null,
+      obligation_id: d.obligation?.id ?? null,
+      obligation_title: d.obligation
+        ? localizeObligationTitle(locale, d.obligation.title)
+        : null,
+      status: a?.status ?? null,
       evidence_id: d.id,
       file_name: d.title,
       file_path: d.filePath ?? "",
-      document_type: a.document_type,
-      purpose: a.purpose,
-      ai_document_type: a.ai_document_type,
-      ai_document_type_confidence: a.ai_document_type_confidence,
-      ai_purpose: a.ai_purpose,
-      ai_purpose_confidence: a.ai_purpose_confidence,
+      mime_type: d.mimeType,
+      document_type: a?.document_type ?? d.documentType,
+      purpose: a?.purpose ?? d.purpose,
+      ai_document_type: a?.ai_document_type ?? d.documentType,
+      ai_document_type_confidence: a?.ai_document_type_confidence ?? d.typeConfidence,
+      ai_purpose: a?.ai_purpose ?? d.purpose,
+      ai_purpose_confidence: a?.ai_purpose_confidence ?? null,
       document_type_candidates: d.documentTypeCandidates,
       purpose_candidates: d.purposeCandidates,
-      ai_summary: a.ai_summary ?? d.summary,
-      ai_reasoning: a.ai_reasoning_full,
+      ai_summary: a?.ai_summary ?? d.summary,
+      ai_reasoning: a?.ai_reasoning_full ?? null,
+    });
+  };
+
+  const openFiling = async (evidenceId: string) => {
+    const [evRes, orgRes, linkRes] = await Promise.all([
+      supabase
+        .from("evidence")
+        .select(
+          "id, file_name, file_path, mime_type, ai_summary, primary_document_type, primary_purpose, primary_document_type_confidence, primary_purpose_confidence, document_type_candidates, purpose_candidates",
+        )
+        .eq("id", evidenceId)
+        .single(),
+      supabase.from("organizations").select("name").eq("id", orgId).maybeSingle(),
+      supabase
+        .from("evidence_links")
+        .select(
+          "id, obligation_id, status, document_type, purpose, ai_document_type, ai_document_type_confidence, ai_purpose, ai_purpose_confidence, ai_summary, ai_reasoning_full",
+        )
+        .eq("evidence_id", evidenceId),
+    ]);
+    const ev = evRes.data;
+    if (!ev) return;
+    const a = (linkRes.data ?? [])[0];
+    let obligationTitle: string | null = null;
+    if (a?.obligation_id) {
+      const { data: ob } = await supabase
+        .from("obligations")
+        .select("title")
+        .eq("id", a.obligation_id)
+        .maybeSingle();
+      obligationTitle = ob?.title ? localizeObligationTitle(locale, ob.title) : null;
+    }
+    setReviewing({
+      assignment_id: a?.id ?? null,
+      obligation_id: a?.obligation_id ?? null,
+      obligation_title: obligationTitle,
+      status: a?.status === "verified" ? "verified" : a ? "needs_review" : null,
+      evidence_id: ev.id,
+      file_name: ev.file_name,
+      file_path: ev.file_path,
+      mime_type: ev.mime_type,
+      suggested_file_name: suggestedDisplayName(
+        orgRes.data?.name ?? "",
+        a?.document_type ?? a?.ai_document_type ?? ev.primary_document_type,
+        ev.file_name,
+      ),
+      document_type: a?.document_type ?? ev.primary_document_type,
+      purpose: a?.purpose ?? ev.primary_purpose,
+      ai_document_type: a?.ai_document_type ?? ev.primary_document_type,
+      ai_document_type_confidence:
+        a?.ai_document_type_confidence ?? ev.primary_document_type_confidence,
+      ai_purpose: a?.ai_purpose ?? ev.primary_purpose,
+      ai_purpose_confidence: a?.ai_purpose_confidence ?? ev.primary_purpose_confidence,
+      document_type_candidates: (ev.document_type_candidates as Candidate[] | null) ?? null,
+      purpose_candidates: (ev.purpose_candidates as Candidate[] | null) ?? null,
+      ai_summary: a?.ai_summary ?? ev.ai_summary,
+      ai_reasoning: a?.ai_reasoning_full ?? null,
     });
   };
 
@@ -230,6 +290,7 @@ function DocumentsPage() {
       toast.success(t("library.interpreted"));
       await qc.invalidateQueries({ queryKey: ["documents", orgId] });
       await qc.invalidateQueries({ queryKey: ["register-company", orgId] });
+      await openFiling(d.id);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : String(e));
     }
@@ -305,7 +366,7 @@ function DocumentsPage() {
         mode ? undefined : (
         <div className="mx-auto max-w-6xl px-6 py-6">
           <p className="mb-3 text-sm text-muted-foreground">{t("library.startNew")}</p>
-          <DocumentUpload orgId={orgId} context="library" appearance="tile" />
+          <DocumentUpload orgId={orgId} context="library" appearance="tile" onAfterUpload={openFiling} />
         </div>
         )
       }
@@ -334,7 +395,14 @@ function DocumentsPage() {
         </Button>
       </div>
 
-      {mode && <RegisterCompanyGuide orgId={orgId} topic={mode} onReview={setReviewing} />}
+      {mode && (
+        <RegisterCompanyGuide
+          orgId={orgId}
+          topic={mode}
+          onReview={setReviewing}
+          onFiled={openFiling}
+        />
+      )}
 
       {!mode && (documents.isLoading ? (
         <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
