@@ -328,7 +328,7 @@ export function LibraryPageShell({ children, mutedTop }: { children: ReactNode; 
   return (
     <div>
       {mutedTop && <div className="border-b border-border bg-muted/40">{mutedTop}</div>}
-      <div className={cn("mx-auto max-w-6xl px-6", mutedTop ? "py-8" : "py-10")}>{children}</div>
+      <div className={cn("mx-auto max-w-6xl px-6", mutedTop ? "py-6" : "py-10")}>{children}</div>
     </div>
   );
 }

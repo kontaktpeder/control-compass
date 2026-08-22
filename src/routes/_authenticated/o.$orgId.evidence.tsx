@@ -302,6 +302,30 @@ function DocumentsPage() {
         </div>
       }
     >
+      <div className="mb-6 flex flex-wrap items-center gap-2">
+        <Button
+          size="sm"
+          variant={!mode ? "secondary" : "outline"}
+          onClick={() => setMode(undefined)}
+        >
+          {t("library.filterAll")}
+        </Button>
+        <Button
+          size="sm"
+          variant={mode === "register" ? "secondary" : "outline"}
+          onClick={() => setMode("register")}
+        >
+          {t("library.registerMode")}
+        </Button>
+        <Button
+          size="sm"
+          variant={mode === "food" ? "secondary" : "outline"}
+          onClick={() => setMode("food")}
+        >
+          {t("library.foodMode")}
+        </Button>
+      </div>
+
       {mode && <RegisterCompanyGuide orgId={orgId} topic={mode} onReview={setReviewing} />}
 
       {documents.isLoading ? (
@@ -320,31 +344,15 @@ function DocumentsPage() {
           selectedIds={selectedIds}
           onToggleSelect={toggle}
           toolbarStart={
-            <>
+            selectedCount > 0 ? (
               <Button
                 size="sm"
-                variant={mode === "register" ? "secondary" : "outline"}
-                onClick={() => setMode(mode === "register" ? undefined : "register")}
+                variant="destructive"
+                onClick={() => setPendingDelete([...selectedIds])}
               >
-                {t("library.registerMode")}
+                {t("common.delete")} · {selectedCount}
               </Button>
-              <Button
-                size="sm"
-                variant={mode === "food" ? "secondary" : "outline"}
-                onClick={() => setMode(mode === "food" ? undefined : "food")}
-              >
-                {t("library.foodMode")}
-              </Button>
-              {selectedCount > 0 && (
-                <Button
-                  size="sm"
-                  variant="destructive"
-                  onClick={() => setPendingDelete([...selectedIds])}
-                >
-                  {t("common.delete")} · {selectedCount}
-                </Button>
-              )}
-            </>
+            ) : undefined
           }
           empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
         />

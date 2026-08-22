@@ -148,85 +148,72 @@ export function RegisterCompanyGuide({
 
   if (data.error) {
     return (
-      <div className="mb-8 rounded-lg border border-border bg-card px-4 py-3">
+      <div className="mb-6 rounded-lg border border-border bg-card px-4 py-3">
         <p className="text-sm text-status-missing">{data.error.message}</p>
       </div>
     );
   }
 
   return (
-    <div className="mb-8 rounded-lg border border-border bg-card">
-      <div className="border-b border-border px-4 py-3">
-        <p className="text-sm font-medium">
-          {topic === "food" ? t("workflow.foodTitle") : t("workflow.title")}
-        </p>
-        <p className="mt-0.5 text-xs text-muted-foreground">
-          {topic === "food" ? t("workflow.foodSubtitle") : t("workflow.lede")}
-        </p>
-        <div className="mt-2 flex flex-wrap gap-4 text-xs">
-          <span className="text-muted-foreground">
-            {t("workflow.requiredOnFile", { onFile, total: shown.length })}
-          </span>
-          {needsReview > 0 && (
-            <span className="text-status-partial">
-              {t("workflow.awaitingReview", { count: needsReview })}
-            </span>
-          )}
+    <div className="mb-8">
+      <div className="mb-4 flex flex-wrap items-baseline justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium">
+            {topic === "food" ? t("workflow.foodTitle") : t("workflow.title")}
+          </p>
+          <p className="mt-0.5 text-xs text-muted-foreground">
+            {topic === "food" ? t("workflow.foodSubtitle") : t("workflow.lede")}
+          </p>
         </div>
+        <p className="text-xs text-muted-foreground">
+          {t("workflow.requiredOnFile", { onFile, total: shown.length })}
+          {needsReview > 0 ? ` · ${t("workflow.awaitingReview", { count: needsReview })}` : ""}
+        </p>
       </div>
 
       {topic === "register" && (
-        <>
-          <GuideSection
-            title={t("workflow.requiredTitle")}
-            subtitle={t("workflow.requiredSubtitle")}
+        <div className="space-y-5">
+          <GuideGroup
+            label={t("workflow.requiredTitle")}
             orgId={orgId}
             obligations={required}
             byOb={byOb}
             onReview={onReview}
           />
-          <GuideSection
-            title={t("workflow.companyTitle")}
-            subtitle={t("workflow.companySubtitle")}
+          <GuideGroup
+            label={t("workflow.companyTitle")}
             orgId={orgId}
             obligations={company}
             byOb={byOb}
             onReview={onReview}
           />
-        </>
+        </div>
       )}
       {topic === "food" && kind === "holding" && (
-        <p className="px-4 py-4 text-sm text-muted-foreground">{t("workflow.foodHoldingHint")}</p>
+        <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          {t("workflow.foodHoldingHint")}
+        </p>
       )}
-      {topic === "food" && kind !== "holding" && (
-        <>
-          {food.length === 0 && !data.isLoading && (
-            <p className="px-4 py-4 text-sm text-muted-foreground">{t("workflow.foodEmpty")}</p>
-          )}
-          <GuideSection
-            title={t("workflow.foodTitle")}
-            subtitle={t("workflow.foodSubtitle")}
-            orgId={orgId}
-            obligations={food}
-            byOb={byOb}
-            onReview={onReview}
-          />
-        </>
+      {topic === "food" && kind !== "holding" && food.length === 0 && !data.isLoading && (
+        <p className="rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          {t("workflow.foodEmpty")}
+        </p>
+      )}
+      {topic === "food" && kind !== "holding" && food.length > 0 && (
+        <GuideGroup orgId={orgId} obligations={food} byOb={byOb} onReview={onReview} />
       )}
     </div>
   );
 }
 
-function GuideSection({
-  title,
-  subtitle,
+function GuideGroup({
+  label,
   orgId,
   obligations,
   byOb,
   onReview,
 }: {
-  title: string;
-  subtitle: string;
+  label?: string;
   orgId: string;
   obligations: Array<
     ObligationRow & { legal: { citation: string; url: string } | null }
@@ -238,10 +225,13 @@ function GuideSection({
   if (obligations.length === 0) return null;
 
   return (
-    <div className="px-4 py-3">
-      <p className="text-sm font-medium">{title}</p>
-      <p className="mb-1 text-xs text-muted-foreground">{subtitle}</p>
-      <Accordion type="single" collapsible>
+    <div>
+      {label && (
+        <p className="mb-2 text-[11px] font-medium uppercase tracking-wide text-muted-foreground">
+          {label}
+        </p>
+      )}
+      <Accordion type="single" collapsible className="overflow-hidden rounded-lg border border-border bg-card">
         {obligations.map((o) => {
           const assignment = byOb.get(o.id);
           const lifecycle = lifecycleFor(assignment);
@@ -252,15 +242,15 @@ function GuideSection({
             if (r) onReview(r);
           };
           return (
-            <AccordionItem key={o.id} value={o.id} className="border-border">
-              <AccordionTrigger className="py-3 hover:no-underline">
-                <span className="flex min-w-0 flex-1 items-center gap-2 pr-3">
-                  <span className="truncate text-sm font-medium">{o.title}</span>
+            <AccordionItem key={o.id} value={o.id} className="border-border px-3">
+              <AccordionTrigger className="py-2.5 hover:no-underline">
+                <span className="flex min-w-0 flex-1 items-center gap-3 pr-3">
+                  <span className="min-w-0 flex-1 truncate text-left text-sm">{o.title}</span>
                   <DocumentStatusPill state={lifecycle} />
                 </span>
               </AccordionTrigger>
               <AccordionContent>
-                <div className="space-y-3 pb-1">
+                <div className="space-y-3 pb-3">
                   {o.why && <p className="text-sm text-muted-foreground">{o.why}</p>}
                   {o.responsible && (
                     <p className="text-xs text-muted-foreground">
@@ -280,14 +270,11 @@ function GuideSection({
                     </a>
                   )}
                   {o.evidence_requirements && o.evidence_requirements.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium">{t("obligations.requiredEvidence")}</p>
-                      <ul className="mt-1 list-disc pl-4 text-xs text-muted-foreground">
-                        {o.evidence_requirements.map((req) => (
-                          <li key={req}>{req}</li>
-                        ))}
-                      </ul>
-                    </div>
+                    <ul className="list-disc pl-4 text-xs text-muted-foreground">
+                      {o.evidence_requirements.map((req) => (
+                        <li key={req}>{req}</li>
+                      ))}
+                    </ul>
                   )}
                   {ev && (
                     <p className="flex items-center gap-1.5 truncate text-xs text-muted-foreground">
