@@ -70,28 +70,28 @@ export const PLAYBOOK_LEGAL_BASIS: Record<
     url: lovdataParagraphUrl("1998-07-17-56", "§8-2"),
   },
   "Mattilsynet Food Business Registration": {
-    citation: "Næringsmiddelhygieneforskriften, jf. forordning (EF) nr. 852/2004 art. 6",
-    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+    citation: "Mattilsynet: Registrer matbedriften",
+    url: "https://www.mattilsynet.no/skjemaer/registrering-av-naeringsmiddelvirksomhet",
   },
   "Production Premises Hygiene": {
-    citation: "Næringsmiddelhygieneforskriften vedlegg II",
-    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+    citation: "Mattilsynet: Lokaler, utstyr og innredning",
+    url: "https://www.mattilsynet.no/mat-og-drikke/matservering/lokaler-utstyr-og-innredning",
   },
   "IK-Mat Procedures (HACCP)": {
-    citation: "Næringsmiddelhygieneforskriften, jf. forordning (EF) nr. 852/2004 art. 5",
-    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+    citation: "Mattilsynet: Internkontroll (IK-Mat)",
+    url: "https://www.mattilsynet.no/mat-og-drikke/matservering/internkontroll",
   },
   "Temperature Logging": {
-    citation: "Næringsmiddelhygieneforskriften vedlegg II kap. IX",
-    url: "https://lovdata.no/dokument/SF/forskrift/2008-12-22-1623",
+    citation: "Mattilsynet: Temperaturkontroll",
+    url: "https://www.mattilsynet.no/mat-og-drikke/matproduksjon/frukt-baer-gronnsaker-og-korn/fakta-om-hvordan-du-kan-holde-kontroll-pa-kjoletemperaturen",
   },
   "Traceability Records": {
-    citation: "Matloven, jf. forordning (EF) nr. 178/2002 art. 18",
-    url: lovdataLawUrl("2003-12-19-124"),
+    citation: "Mattilsynet: Sporbarhet",
+    url: "https://www.mattilsynet.no/mat-og-drikke/merking-av-mat/veileder-om-sporbarhet-for-naeringsmidler",
   },
   "Allergen and Labelling Control": {
-    citation: "Matinformasjonsforskriften, jf. forordning (EU) nr. 1169/2011",
-    url: "https://lovdata.no/dokument/SF/forskrift/2014-11-28-1497",
+    citation: "Mattilsynet: Merking og allergener",
+    url: "https://www.mattilsynet.no/mat-og-drikke/merking-av-mat/krav-til-merking-av-ferdigpakket-mat",
   },
 };
 
@@ -99,8 +99,10 @@ export function legalBasisForObligation(
   title: string,
   stored?: { legal_citation?: string | null; legal_url?: string | null },
 ) {
+  const fromPlaybook = PLAYBOOK_LEGAL_BASIS[title];
+  if (fromPlaybook) return fromPlaybook;
   if (stored?.legal_url) {
     return { citation: stored.legal_citation ?? title, url: stored.legal_url };
   }
-  return PLAYBOOK_LEGAL_BASIS[title] ?? null;
+  return null;
 }

@@ -11,8 +11,14 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { toast } from "sonner";
-import { FileText, ExternalLink } from "lucide-react";
+import { FileText, ExternalLink, MoreVertical } from "lucide-react";
 import { useT } from "@/components/locale-provider";
 import { isFoodSafetyObligationTitle, localizeObligation } from "@/lib/playbook-i18n";
 import { legalBasisForObligation } from "@/lib/legal-sources";
@@ -282,27 +288,36 @@ function GuideGroup({
           };
           return (
             <AccordionItem key={o.id} value={o.id} className="border-border px-3">
-              <div className="flex items-center gap-1">
-                <AccordionTrigger className="flex-1 py-2.5 hover:no-underline">
-                  <span className="flex min-w-0 flex-1 items-center gap-3 pr-2">
-                    <span className="min-w-0 flex-1 truncate text-left text-sm">{o.title}</span>
-                    <DocumentStatusPill state={lifecycle} />
-                  </span>
+              <div className="flex items-center gap-2">
+                <AccordionTrigger className="min-w-0 flex-1 py-2.5 hover:no-underline [&>svg]:hidden">
+                  <span className="min-w-0 flex-1 truncate text-left text-sm">{o.title}</span>
                 </AccordionTrigger>
-                {assignment && (
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="ghost"
-                    className="shrink-0 text-muted-foreground"
-                    onClick={(e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      onUnlink(assignment.id);
-                    }}
-                  >
-                    {t("workflow.unlink")}
-                  </Button>
+                <DocumentStatusPill state={lifecycle} className="shrink-0" />
+                {assignment ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button
+                        type="button"
+                        size="icon"
+                        variant="ghost"
+                        className="h-8 w-8 shrink-0 border border-border bg-background"
+                        aria-label={t("library.more")}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenuItem
+                        className="text-destructive focus:text-destructive"
+                        onSelect={() => onUnlink(assignment.id)}
+                      >
+                        {t("workflow.unlink")}
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <span className="h-8 w-8 shrink-0" aria-hidden />
                 )}
               </div>
               <AccordionContent>
@@ -382,15 +397,6 @@ function GuideGroup({
                         }}
                       >
                         {t("common.view")}
-                      </Button>
-                    )}
-                    {assignment && (
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => onUnlink(assignment.id)}
-                      >
-                        {t("workflow.unlink")}
                       </Button>
                     )}
                   </div>
