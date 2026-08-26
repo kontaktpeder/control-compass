@@ -6,7 +6,13 @@ import { updateDocumentMeta } from "@/lib/library.functions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { toast } from "sonner";
 import { Check, X, Sparkles, Pencil } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -42,9 +48,11 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   assignment: ReviewAssignment | null;
+  /** Remaining documents waiting after this one, when several were dropped. */
+  queueRemaining?: number;
 };
 
-export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
+export function DocumentReviewPanel({ open, onOpenChange, assignment, queueRemaining = 0 }: Props) {
   const { t } = useT();
   const qc = useQueryClient();
   const confirmFn = useServerFn(confirmAssignment);
@@ -134,9 +142,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
     }
   };
 
-  const canOneClickConfirm =
-    !editing &&
-    (!linked || (!!suggestedDoc && !!suggestedPurpose));
+  const canOneClickConfirm = !editing && (!linked || (!!suggestedDoc && !!suggestedPurpose));
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -148,6 +154,7 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
             {linked && assignment.obligation_title
               ? t("review.assignedTo", { title: assignment.obligation_title })
               : t("review.unassigned")}
+            {queueRemaining > 0 ? ` ${t("review.queueRemaining", { count: queueRemaining })}` : ""}
           </SheetDescription>
         </SheetHeader>
 
@@ -231,7 +238,10 @@ export function DocumentReviewPanel({ open, onOpenChange, assignment }: Props) {
                 <Button
                   disabled={busy || !canOneClickConfirm}
                   onClick={() =>
-                    handleConfirm(suggestedDoc ?? "Document", suggestedPurpose ?? "Operational Documentation")
+                    handleConfirm(
+                      suggestedDoc ?? "Document",
+                      suggestedPurpose ?? "Operational Documentation",
+                    )
                   }
                 >
                   <Check className="mr-1 h-4 w-4" />

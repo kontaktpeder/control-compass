@@ -1,12 +1,11 @@
 import { createFileRoute, useNavigate, useParams } from "@tanstack/react-router";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useServerFn } from "@tanstack/react-start";
 import { z } from "zod";
 import { supabase } from "@/integrations/supabase/client";
 import { classifyEvidence } from "@/lib/ai.functions";
 import { unlinkAssignment } from "@/lib/document-assignment.functions";
-import { DocumentUpload } from "@/components/document-upload";
 import { DocumentReviewPanel, type ReviewAssignment } from "@/components/document-review-panel";
 import { DocumentMetaSheet } from "@/components/document-meta-sheet";
 import { RegisterCompanyGuide } from "@/components/register-company";
@@ -18,8 +17,12 @@ import {
   type LibraryEntry,
   type LibraryMenuAction,
 } from "@/components/library-browser";
+import { useEvidenceUpload } from "@/hooks/use-evidence-upload";
 import { useLibraryLayout } from "@/hooks/use-library-layout";
+import { usePageFileDrop } from "@/hooks/use-page-file-drop";
+import { filterEvidenceFiles } from "@/lib/evidence-files";
 import { Button } from "@/components/ui/button";
+import { Upload } from "lucide-react";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -34,7 +37,11 @@ import { toast } from "sonner";
 import { useT } from "@/components/locale-provider";
 import { localizeObligationTitle } from "@/lib/playbook-i18n";
 import { isDocumentCategory, type LibraryItem } from "@/lib/library";
-import { isOpaqueFileName, suggestedDisplayName, suggestedFileNameFromHeading } from "@/lib/file-name";
+import {
+  isOpaqueFileName,
+  suggestedDisplayName,
+  suggestedFileNameFromHeading,
+} from "@/lib/file-name";
 
 const documentsSearch = z.object({
   mode: z.enum(["register", "food"]).optional(),
@@ -70,11 +77,26 @@ function DocumentsPage() {
   const { t, locale } = useT();
   const [layout, setLayout] = useLibraryLayout();
   const [reviewing, setReviewing] = useState<ReviewAssignment | null>(null);
+  const [queueRemaining, setQueueRemaining] = useState(0);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [pendingDelete, setPendingDelete] = useState<string[] | null>(null);
+  const [filingProgress, setFilingProgress] = useState<{ current: number; total: number } | null>(
+    null,
+  );
   const { selectedIds, toggle, clear } = useSelectedIds();
   const classify = useServerFn(classifyEvidence);
   const unlinkFn = useServerFn(unlinkAssignment);
+  const { uploadOne } = useEvidenceUpload(orgId);
+
+  const reviewQueueRef = useRef<string[]>([]);
+  const reviewOpenRef = useRef(false);
+  const pendingFilesRef = useRef<File[]>([]);
+  const filingBusyRef = useRef(false);
+  const filingTotalRef = useRef(0);
+  const filingDoneRef = useRef(0);
+  const uploadOneRef = useRef(uploadOne);
+  uploadOneRef.current = uploadOne;
+  const openFilingRef = useRef<(evidenceId: string) => Promise<void>>(async () => {});
 
   const setMode = (next: "register" | "food" | undefined) => {
     void navigate({
@@ -193,14 +215,17 @@ function DocumentsPage() {
     window.open(data.signedUrl, "_blank", "noopener,noreferrer");
   };
 
+  const showReview = (assignment: ReviewAssignment) => {
+    reviewOpenRef.current = true;
+    setReviewing(assignment);
+  };
+
   const openReview = (d: LibraryItem) => {
     const a = d.assignment;
-    setReviewing({
+    showReview({
       assignment_id: a?.id ?? null,
       obligation_id: d.obligation?.id ?? null,
-      obligation_title: d.obligation
-        ? localizeObligationTitle(locale, d.obligation.title)
-        : null,
+      obligation_title: d.obligation ? localizeObligationTitle(locale, d.obligation.title) : null,
       status: a?.status ?? null,
       evidence_id: d.id,
       file_name: d.title,
@@ -219,7 +244,19 @@ function DocumentsPage() {
     });
   };
 
+  const dismissReview = () => {
+    const next = reviewQueueRef.current.shift();
+    setQueueRemaining(reviewQueueRef.current.length);
+    if (next) {
+      void openFilingRef.current(next);
+      return;
+    }
+    reviewOpenRef.current = false;
+    setReviewing(null);
+  };
+
   const openFiling = async (evidenceId: string) => {
+    reviewOpenRef.current = true;
     const [evRes, orgRes, linkRes] = await Promise.all([
       supabase
         .from("evidence")
@@ -237,7 +274,10 @@ function DocumentsPage() {
         .eq("evidence_id", evidenceId),
     ]);
     const ev = evRes.data;
-    if (!ev) return;
+    if (!ev) {
+      dismissReview();
+      return;
+    }
     const a = (linkRes.data ?? [])[0];
     let obligationTitle: string | null = null;
     if (a?.obligation_id) {
@@ -250,7 +290,7 @@ function DocumentsPage() {
     }
     const typeLabel = a?.document_type ?? a?.ai_document_type ?? ev.primary_document_type;
     const headingSuggested = suggestedFileNameFromHeading(ev.printed_title, ev.file_name);
-    setReviewing({
+    showReview({
       assignment_id: a?.id ?? null,
       obligation_id: a?.obligation_id ?? null,
       obligation_title: obligationTitle,
@@ -277,6 +317,59 @@ function DocumentsPage() {
       ai_reasoning: a?.ai_reasoning_full ?? null,
     });
   };
+  openFilingRef.current = openFiling;
+
+  const presentReview = (evidenceId: string) => {
+    if (reviewOpenRef.current) {
+      reviewQueueRef.current.push(evidenceId);
+      setQueueRemaining(reviewQueueRef.current.length);
+      return;
+    }
+    void openFiling(evidenceId);
+  };
+
+  const processPendingFiles = async () => {
+    if (filingBusyRef.current) return;
+    filingBusyRef.current = true;
+    try {
+      while (pendingFilesRef.current.length) {
+        const file = pendingFilesRef.current.shift()!;
+        filingDoneRef.current += 1;
+        setFilingProgress({
+          current: filingDoneRef.current,
+          total: filingTotalRef.current,
+        });
+        try {
+          const id = await uploadOneRef.current(file, { context: "library" });
+          presentReview(id);
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : String(e));
+        }
+      }
+    } finally {
+      filingBusyRef.current = false;
+      if (pendingFilesRef.current.length) {
+        void processPendingFiles();
+      } else {
+        filingTotalRef.current = 0;
+        filingDoneRef.current = 0;
+        setFilingProgress(null);
+      }
+    }
+  };
+
+  const dropActive = usePageFileDrop((files) => {
+    const { accepted, skipped } = filterEvidenceFiles(files);
+    if (skipped) toast.error(t("library.dropRejected", { count: skipped }));
+    if (!accepted.length) return;
+    pendingFilesRef.current.push(...accepted);
+    filingTotalRef.current += accepted.length;
+    setFilingProgress({
+      current: filingDoneRef.current,
+      total: filingTotalRef.current,
+    });
+    void processPendingFiles();
+  });
 
   const interpretWithAi = async (d: LibraryItem) => {
     toast.info(t("upload.understanding"));
@@ -370,122 +463,139 @@ function DocumentsPage() {
   const selectedCount = selectedIds.size;
 
   return (
-    <LibraryPageShell
-      mutedTop={
-        mode ? undefined : (
-        <div className="mx-auto max-w-6xl px-6 py-6">
-          <p className="mb-3 text-sm text-muted-foreground">{t("library.startNew")}</p>
-          <DocumentUpload orgId={orgId} context="library" appearance="tile" onAfterUpload={openFiling} />
+    <>
+      <LibraryPageShell>
+        <p className="mb-4 text-sm text-muted-foreground">{t("library.startNew")}</p>
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant={!mode ? "secondary" : "outline"}
+            onClick={() => setMode(undefined)}
+          >
+            {t("library.filterAll")}
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === "register" ? "secondary" : "outline"}
+            onClick={() => setMode("register")}
+          >
+            {t("library.registerMode")}
+          </Button>
+          <Button
+            size="sm"
+            variant={mode === "food" ? "secondary" : "outline"}
+            onClick={() => setMode("food")}
+          >
+            {t("library.foodMode")}
+          </Button>
         </div>
-        )
-      }
-    >
-      <div className="mb-6 flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          variant={!mode ? "secondary" : "outline"}
-          onClick={() => setMode(undefined)}
-        >
-          {t("library.filterAll")}
-        </Button>
-        <Button
-          size="sm"
-          variant={mode === "register" ? "secondary" : "outline"}
-          onClick={() => setMode("register")}
-        >
-          {t("library.registerMode")}
-        </Button>
-        <Button
-          size="sm"
-          variant={mode === "food" ? "secondary" : "outline"}
-          onClick={() => setMode("food")}
-        >
-          {t("library.foodMode")}
-        </Button>
-      </div>
 
-      {mode && (
-        <RegisterCompanyGuide
-          orgId={orgId}
-          topic={mode}
-          onReview={setReviewing}
-          onFiled={openFiling}
-        />
-      )}
+        {mode && (
+          <RegisterCompanyGuide
+            orgId={orgId}
+            topic={mode}
+            onReview={showReview}
+            onFiled={presentReview}
+          />
+        )}
 
-      {!mode && (documents.isLoading ? (
-        <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
-      ) : (
-        <LibraryBrowser
-          items={items}
-          layout={layout}
-          onLayoutChange={setLayout}
-          heading={t("library.recent")}
-          onOpen={(item) => {
-            const d = byId.get(item.id);
-            if (d?.filePath) void openFile(d.filePath);
-          }}
-          menuFor={menuFor}
-          selectedIds={selectedIds}
-          onToggleSelect={toggle}
-          toolbarStart={
-            selectedCount > 0 ? (
-              <Button
-                size="sm"
-                variant="destructive"
-                onClick={() => setPendingDelete([...selectedIds])}
-              >
-                {t("common.delete")} · {selectedCount}
-              </Button>
-            ) : undefined
-          }
-          empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
-        />
-      ))}
-
-      <DocumentReviewPanel
-        open={!!reviewing}
-        onOpenChange={(v) => {
-          if (!v) setReviewing(null);
-        }}
-        assignment={reviewing}
-      />
-      <DocumentMetaSheet
-        open={!!editingId}
-        onOpenChange={(v) => {
-          if (!v) setEditingId(null);
-        }}
-        orgId={orgId}
-        evidenceId={editingId}
-      />
-      <AlertDialog open={!!pendingDelete} onOpenChange={(open) => !open && setPendingDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("library.deleteConfirmTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("library.deleteConfirm", { count: pendingDelete?.length ?? 0 })}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
-            <AlertDialogAction
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-              onClick={async (e) => {
-                e.preventDefault();
-                if (!pendingDelete?.length) return;
-                try {
-                  await deleteIds(pendingDelete);
-                  setPendingDelete(null);
-                } catch (err) {
-                  toast.error(err instanceof Error ? err.message : t("library.deleteFailed"));
-                }
+        {!mode &&
+          (documents.isLoading ? (
+            <p className="text-sm text-muted-foreground">{t("common.loading")}</p>
+          ) : (
+            <LibraryBrowser
+              items={items}
+              layout={layout}
+              onLayoutChange={setLayout}
+              heading={t("library.recent")}
+              onOpen={(item) => {
+                const d = byId.get(item.id);
+                if (d?.filePath) void openFile(d.filePath);
               }}
-            >
-              {t("common.delete")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-    </LibraryPageShell>
+              menuFor={menuFor}
+              selectedIds={selectedIds}
+              onToggleSelect={toggle}
+              toolbarStart={
+                selectedCount > 0 ? (
+                  <Button
+                    size="sm"
+                    variant="destructive"
+                    onClick={() => setPendingDelete([...selectedIds])}
+                  >
+                    {t("common.delete")} · {selectedCount}
+                  </Button>
+                ) : undefined
+              }
+              empty={<LibraryEmpty>{t("library.empty")}</LibraryEmpty>}
+            />
+          ))}
+
+        <DocumentReviewPanel
+          open={!!reviewing}
+          onOpenChange={(v) => {
+            if (!v) dismissReview();
+          }}
+          assignment={reviewing}
+          queueRemaining={queueRemaining}
+        />
+        <DocumentMetaSheet
+          open={!!editingId}
+          onOpenChange={(v) => {
+            if (!v) setEditingId(null);
+          }}
+          orgId={orgId}
+          evidenceId={editingId}
+        />
+        <AlertDialog
+          open={!!pendingDelete}
+          onOpenChange={(open) => !open && setPendingDelete(null)}
+        >
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("library.deleteConfirmTitle")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("library.deleteConfirm", { count: pendingDelete?.length ?? 0 })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogCancel>{t("common.cancel")}</AlertDialogCancel>
+              <AlertDialogAction
+                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                onClick={async (e) => {
+                  e.preventDefault();
+                  if (!pendingDelete?.length) return;
+                  try {
+                    await deleteIds(pendingDelete);
+                    setPendingDelete(null);
+                  } catch (err) {
+                    toast.error(err instanceof Error ? err.message : t("library.deleteFailed"));
+                  }
+                }}
+              >
+                {t("common.delete")}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+      </LibraryPageShell>
+
+      {dropActive && (
+        <div className="pointer-events-none fixed inset-0 z-[100] flex items-center justify-center bg-primary/15">
+          <div className="rounded-xl border-2 border-dashed border-primary bg-background/95 px-10 py-8 text-center shadow-lg">
+            <Upload className="mx-auto h-10 w-10 text-primary" strokeWidth={1.5} />
+            <p className="mt-3 text-lg font-medium">{t("library.dropOverlay")}</p>
+            <p className="mt-1 text-sm text-muted-foreground">{t("library.dropOverlayHint")}</p>
+          </div>
+        </div>
+      )}
+      {filingProgress && (
+        <div className="fixed bottom-4 left-1/2 z-[90] -translate-x-1/2 rounded-full border border-border bg-background px-4 py-2 text-sm shadow-md">
+          {t("upload.filingProgress", {
+            current: Math.max(1, filingProgress.current),
+            total: filingProgress.total,
+          })}
+        </div>
+      )}
+    </>
   );
 }
